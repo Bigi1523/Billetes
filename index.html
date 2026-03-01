@@ -14,33 +14,27 @@
   body{ margin:0; background:#000; color:#fff; font-family:system-ui; overflow:hidden; }
   #wrap{ position:relative; width:100vw; height:100vh; }
 
-  video{
-    width:100%; height:100%;
-    object-fit:cover;
-    background:#000;
-    display:none;
-  }
+  video{ width:100%; height:100%; object-fit:cover; background:#000; display:none; }
 
-  /* Marco ROI */
+  /* ROI: ahora más pequeño (por defecto) */
   #roi{
     position:absolute;
-    top:20%;
-    right:5%;
-    width:78%;
-    height:16%;
+    top:22%;
+    right:10%;
+    width:62%;
+    height:12%;
     border:4px solid var(--green);
-    border-radius:18px;
+    border-radius:16px;
     box-shadow:0 0 0 9999px rgba(0,0,0,.32);
     pointer-events:none;
     display:none;
   }
 
-  /* Texto debajo del marco (serial o mensajes) */
   #serial{
     position:absolute;
-    top:calc(20% + 16% + 14px);
-    right:5%;
-    width:78%;
+    top:calc(22% + 12% + 14px);
+    right:10%;
+    width:62%;
     text-align:center;
     font-size:22px;
     font-weight:900;
@@ -48,17 +42,12 @@
     display:none;
     text-shadow: 0 2px 10px rgba(0,0,0,.7);
   }
-  #serial.warn{
-    color: #ffd60a;
-    font-family: system-ui;
-    font-size:18px;
-    letter-spacing:.2px;
-  }
+  #serial.warn{ color:#ffd60a; font-family:system-ui; font-size:18px; }
+  #serial.searching{ font-family:system-ui; font-size:22px; opacity:.95; }
 
-  /* Resultado central */
   #result{
     position:absolute;
-    top:55%;
+    top:56%;
     left:50%;
     transform:translate(-50%,-50%);
     font-size:160px;
@@ -69,124 +58,81 @@
     pointer-events:none;
     opacity:.92;
   }
-  .ok{ color:var(--green); } /* ✓ */
-  .bad{ color:var(--red); }  /* X */
+  .ok{ color:var(--green); }
+  .bad{ color:var(--red); }
 
-  /* Pantalla inicio */
   .screen{
-    position:absolute;
-    inset:0;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    gap:18px;
-    padding:22px;
-    background:#000;
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; padding:22px; background:#000;
   }
   .hidden{ display:none !important; }
   .title{ font-size:22px; font-weight:900; text-align:center; opacity:.95; }
 
   button{
-    border:none;
-    border-radius:20px;
-    font-weight:900;
-    padding:14px 18px;
-    font-size:18px;
+    border:none; border-radius:20px;
+    font-weight:900; padding:14px 18px; font-size:18px;
   }
   .btnGreen{ background:var(--green); color:#000; }
   .btnRed{ background:var(--red); color:#fff; }
   .btnDark{ background:rgba(255,255,255,.10); color:#fff; }
+  .btnBig{ width:min(440px, 92vw); padding:18px 22px; font-size:22px; }
 
-  .btnBig{
-    width:min(440px, 92vw);
-    padding:18px 22px;
-    font-size:22px;
-  }
-
-  /* Selector corte (pantalla inicio) */
-  .cuts{
-    display:flex;
-    gap:12px;
-    width:min(440px, 92vw);
-    justify-content:center;
-  }
+  .cuts{ display:flex; gap:12px; width:min(440px, 92vw); justify-content:center; }
   .cutBtn{
-    flex:1;
-    background:rgba(255,255,255,.08);
-    color:#fff;
+    flex:1; background:rgba(255,255,255,.08); color:#fff;
     border:2px solid rgba(255,255,255,.14);
-    padding:14px 0;
-    border-radius:18px;
-    font-size:20px;
-    font-weight:900;
+    padding:14px 0; border-radius:18px; font-size:20px; font-weight:900;
   }
-  .cutBtn.active{
-    border-color: var(--green);
-    box-shadow: 0 0 0 3px rgba(25,255,90,.18) inset;
-  }
+  .cutBtn.active{ border-color:var(--green); box-shadow:0 0 0 3px rgba(25,255,90,.18) inset; }
 
-  /* Barra superior en modo cámara */
   #topBar{
-    position:absolute;
-    left:12px;
-    right:12px;
-    top:12px;
-    display:none;
-    pointer-events:auto;
+    position:absolute; left:12px; right:12px; top:12px;
+    display:none; pointer-events:auto;
   }
-
   #topPanel{
-    background: var(--panel);
-    border-radius:22px;
-    padding:10px;
-    display:flex;
-    gap:12px;
-    align-items:flex-start;
+    background:var(--panel); border-radius:22px; padding:10px;
+    display:flex; gap:12px; align-items:flex-start;
   }
-
   #chip{
-    padding:10px 12px;
-    border-radius:16px;
-    font-weight:900;
-    font-size:14px;
-    white-space:nowrap;
-    background: rgba(255,255,255,.10);
+    padding:10px 12px; border-radius:16px; font-weight:900; font-size:14px;
+    white-space:nowrap; background:rgba(255,255,255,.10);
   }
-
-  #topControls{
-    display:flex;
-    flex-direction:column;
-    gap:10px;
-    flex:1;
-  }
-
+  #topControls{ display:flex; flex-direction:column; gap:10px; flex:1; }
   #cutsCam{
-    display:flex;
-    gap:8px;
-    background: rgba(255,255,255,.08);
-    padding:8px;
-    border-radius:18px;
-    width:max-content;
+    display:flex; gap:8px; background:rgba(255,255,255,.08);
+    padding:8px; border-radius:18px; width:max-content;
   }
   .cutMini{
-    background: rgba(0,0,0,.20);
-    border:2px solid rgba(255,255,255,.10);
-    color:#fff;
-    border-radius:14px;
-    padding:8px 12px;
-    font-size:16px;
-    font-weight:900;
+    background:rgba(0,0,0,.20); border:2px solid rgba(255,255,255,.10); color:#fff;
+    border-radius:14px; padding:8px 12px; font-size:16px; font-weight:900;
   }
-  .cutMini.active{ border-color: var(--green); }
+  .cutMini.active{ border-color:var(--green); }
+
+  /* Selector ROI (opcional) */
+  #roiSizeRow{
+    display:flex; gap:8px;
+    background:rgba(255,255,255,.08);
+    padding:8px; border-radius:18px; width:max-content;
+  }
+  .roiMini{
+    background:rgba(0,0,0,.20); border:2px solid rgba(255,255,255,.10); color:#fff;
+    border-radius:14px; padding:8px 10px; font-size:14px; font-weight:900;
+  }
+  .roiMini.active{ border-color:var(--green); }
+
+  #powerBottom{
+    position:absolute; left:50%; transform:translateX(-50%);
+    bottom:24px; width:min(520px, 92vw);
+    display:none; pointer-events:auto;
+  }
+  #powerBottom button{
+    width:100%; padding:18px 22px; font-size:22px; border-radius:26px;
+  }
 
   #status{
-    position:absolute;
-    left:12px; right:12px;
-    bottom:8px;
-    font-size:12px;
-    opacity:.78;
-    white-space:pre-wrap;
+    position:absolute; left:12px; right:12px; bottom:6px;
+    font-size:12px; opacity:.65; white-space:pre-wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 </style>
@@ -197,7 +143,7 @@
   <video id="video" playsinline muted></video>
 
   <div id="roi"></div>
-  <div id="serial">—</div>
+  <div id="serial" class="searching">Buscando…</div>
   <div id="result"></div>
 
   <div id="topBar">
@@ -213,14 +159,21 @@
           <button class="cutMini" data-cut="50">50</button>
         </div>
 
-        <button id="powerBtn" class="btnRed">APAGAR CÁMARA</button>
+        <div id="roiSizeRow" title="Tamaño de ventana (ROI)">
+          <button class="roiMini active" data-roi="S">ROI: Pequeño</button>
+          <button class="roiMini" data-roi="M">Mediano</button>
+          <button class="roiMini" data-roi="L">Grande</button>
+        </div>
       </div>
     </div>
   </div>
 
+  <div id="powerBottom">
+    <button id="powerBtn" class="btnRed">APAGAR CÁMARA</button>
+  </div>
+
   <div id="status"></div>
 
-  <!-- Pantalla inicial -->
   <div id="screenStart" class="screen">
     <div class="title">Elige el corte del billete</div>
     <div class="cuts" id="cutsStart">
@@ -233,9 +186,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
 <script>
-  // ---------- UI ----------
   const video = document.getElementById("video");
   const roi = document.getElementById("roi");
   const serialLabel = document.getElementById("serial");
@@ -243,6 +194,7 @@
   const statusEl = document.getElementById("status");
   const topBar = document.getElementById("topBar");
   const chip = document.getElementById("chip");
+  const powerBottom = document.getElementById("powerBottom");
 
   const screenStart = document.getElementById("screenStart");
   const startBtn = document.getElementById("startBtn");
@@ -253,54 +205,92 @@
   video.muted = true;
   video.setAttribute("playsinline","");
 
-  // ---------- Estado ----------
-  let selectedCut = null; // "10" | "20" | "50"
+  let selectedCut = null;
   let rangesData = {};
   let worker = null;
   let stream = null;
   let running = false;
   let busy = false;
 
-  // OCR timing (más rápido)
-  const OCR_INTERVAL = 320;
+  const OCR_INTERVAL = 260;
 
-  // Confirmación: primero rápido, luego estable
-  let NEED_SAME = 2;             // primer resultado más rápido
+  let NEED_SAME = 2;
   const NEED_SAME_AFTER_FIRST = 3;
-
   let pendingCandidate = null;
   let pendingCount = 0;
 
-  // Persistencia del resultado
   let displayedCandidate = null;
-  let displayedInList = null; // para mantener ✓/X junto al número
+  let displayedInList = null;
 
-  // Serie no reconocida (cuando hay letra distinta de B)
   let nonBCount = 0;
   const NONB_NEED = 2;
 
-  function resetPending(){
-    pendingCandidate = null;
-    pendingCount = 0;
+  let dotsTimer = null;
+  let dotsPhase = 0;
+
+  // ROI sizes (CSS vars by direct style)
+  const ROI_PRESETS = {
+    S: { top:"22%", right:"10%", width:"62%", height:"12%" },
+    M: { top:"21%", right:"8%",  width:"70%", height:"14%" },
+    L: { top:"20%", right:"5%",  width:"78%", height:"16%" }
+  };
+  let roiPreset = "S";
+
+  function applyRoiPreset(p){
+    roiPreset = p;
+    const s = ROI_PRESETS[p];
+    roi.style.top = s.top;
+    roi.style.right = s.right;
+    roi.style.width = s.width;
+    roi.style.height = s.height;
+
+    // mover también el label debajo del ROI
+    serialLabel.style.top = `calc(${s.top} + ${s.height} + 14px)`;
+    serialLabel.style.right = s.right;
+    serialLabel.style.width = s.width;
+
+    document.querySelectorAll(".roiMini").forEach(b=>{
+      b.classList.toggle("active", b.dataset.roi === p);
+    });
   }
+
+  document.querySelectorAll(".roiMini").forEach(b=>{
+    b.addEventListener("click", ()=> applyRoiPreset(b.dataset.roi));
+  });
+
+  function startDots(){
+    if(dotsTimer) return;
+    dotsPhase = 0;
+    dotsTimer = setInterval(()=>{
+      if(!running) return;
+      if(displayedCandidate) return;
+      if(serialLabel.classList.contains("warn")) return;
+      const dots = ".".repeat((dotsPhase % 3) + 1);
+      serialLabel.textContent = "Buscando" + dots;
+      dotsPhase++;
+    }, 350);
+  }
+  function stopDots(){
+    if(dotsTimer){ clearInterval(dotsTimer); dotsTimer = null; }
+  }
+
+  function resetPending(){ pendingCandidate=null; pendingCount=0; }
   function feedCandidate(candidate){
     if(candidate === pendingCandidate) pendingCount++;
-    else { pendingCandidate = candidate; pendingCount = 1; }
+    else { pendingCandidate=candidate; pendingCount=1; }
     return pendingCount >= NEED_SAME;
   }
 
-  // ---------- Cargar rangos ----------
   async function loadRanges(){
     try{
-      rangesData = await fetch("ranges.json?v=" + Date.now(), { cache:"no-store" }).then(r=>r.json());
+      rangesData = await fetch("ranges.json?v="+Date.now(), {cache:"no-store"}).then(r=>r.json());
       statusEl.textContent = "Rangos cargados. Elige corte e inicia cámara.";
     }catch(e){
-      statusEl.textContent = "❌ No pude cargar ranges.json.\n" + (e?.message || e);
+      statusEl.textContent = "❌ No pude cargar ranges.json.\n"+(e?.message||e);
     }
   }
   loadRanges();
 
-  // ---------- Rangos: corte -> "B" -> lista ----------
   function inRangesForCut_B(cut, num){
     const list = rangesData?.[cut]?.["B"];
     if(!list) return false;
@@ -310,287 +300,252 @@
     return false;
   }
 
-  // ---------- Extractor ----------
-  // - Si encuentra 9 dígitos + letra (A-Z): devuelve {status:"found", num, letter}
-  // - Si no: {status:"none"}
-  function parseSerial(text){
-    const t = (text || "").toUpperCase()
-      .replace(/[^\dA-Z]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    // 9 dígitos + letra
-    const m = t.match(/(?:^|\s)(\d{9})\s*([A-Z])(?:\s|$)/);
-    if(!m) return { status:"none" };
-    return { status:"found", num:m[1], letter:m[2] };
+  function normalizeDigits(s){
+    return (s||"")
+      .replace(/O/g,"0").replace(/D/g,"0")
+      .replace(/I/g,"1").replace(/L/g,"1")
+      .replace(/Z/g,"2").replace(/S/g,"5");
   }
 
-  // ---------- Canvas + preprocesado ----------
+  function parseSerial(text){
+    const t = (text||"").toUpperCase().replace(/[^\dA-Z]/g," ").replace(/\s+/g," ").trim();
+    const m = t.match(/(?:^|\s)([0-9A-Z]{9})\s*([A-Z])(?:\s|$)/);
+    if(!m) return {status:"none"};
+    const num = normalizeDigits(m[1]);
+    const letter = m[2];
+    if(!/^\d{9}$/.test(num)) return {status:"none"};
+    return {status:"found", num, letter};
+  }
+
   const frameCanvas = document.createElement("canvas");
-  const frameCtx = frameCanvas.getContext("2d",{ willReadFrequently:true });
+  const frameCtx = frameCanvas.getContext("2d",{willReadFrequently:true});
   const cropCanvas = document.createElement("canvas");
-  const cropCtx = cropCanvas.getContext("2d",{ willReadFrequently:true });
+  const cropCtx = cropCanvas.getContext("2d",{willReadFrequently:true});
 
   function preprocess(img){
     const d = img.data;
-    for(let i=0; i<d.length; i+=4){
-      let y = d[i]*.299 + d[i+1]*.587 + d[i+2]*.114;
-      y = (y - 128) * 1.45 + 128;
-      const v = y > 135 ? 255 : 0;
-      d[i]=d[i+1]=d[i+2]=v;
-      d[i+3]=255;
+    let min=255, max=0;
+    for(let i=0;i<d.length;i+=4){
+      const y = d[i]*.299 + d[i+1]*.587 + d[i+2]*.114;
+      if(y<min) min=y; if(y>max) max=y;
+      d[i]=d[i+1]=d[i+2]=y;
+    }
+    const range = Math.max(1, max-min);
+    const thr = min + range*0.55;
+    for(let i=0;i<d.length;i+=4){
+      let y = (d[i]-min) * (255/range);
+      const v = y > (thr-min)*(255/range) ? 255 : 0;
+      d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
     }
     return img;
   }
 
-  // ---------- UI: selección de corte ----------
   function setCut(cut){
     selectedCut = cut;
     startBtn.disabled = !selectedCut;
 
     document.querySelectorAll("#cutsStart .cutBtn").forEach(b=>{
-      b.classList.toggle("active", b.dataset.cut === selectedCut);
+      b.classList.toggle("active", b.dataset.cut===selectedCut);
     });
     document.querySelectorAll("#cutsCam .cutMini").forEach(b=>{
-      b.classList.toggle("active", b.dataset.cut === selectedCut);
+      b.classList.toggle("active", b.dataset.cut===selectedCut);
     });
 
     chip.textContent = "Corte: " + selectedCut;
 
-    // si ya hay un número fijado, recalcula el símbolo con el nuevo corte
     if(running && displayedCandidate){
       const shownNum = Number(displayedCandidate.split(" ")[0]);
       displayedInList = inRangesForCut_B(selectedCut, shownNum);
       showDecision(displayedInList);
-      statusEl.textContent = `Corte ${selectedCut} · ${displayedCandidate} (recalculado)`;
     }
   }
-
   document.querySelectorAll("[data-cut]").forEach(btn=>{
     btn.addEventListener("click", ()=> setCut(btn.dataset.cut));
   });
 
-  // ---------- Símbolo (EN LISTA = X roja; NO EN LISTA = ✓ verde) ----------
   function showDecision(isInList){
-    result.style.display = "block";
-    if(isInList){
-      result.className = "bad";
-      result.textContent = "✕";
-    } else {
-      result.className = "ok";
-      result.textContent = "✓";
-    }
+    result.style.display="block";
+    if(isInList){ result.className="bad"; result.textContent="✕"; }
+    else { result.className="ok"; result.textContent="✓"; }
   }
 
-  // ---------- OCR worker ----------
   async function initWorker(){
     if(worker) return worker;
-    statusEl.textContent = "Cargando OCR…";
+    statusEl.textContent="Cargando OCR…";
     worker = await Tesseract.createWorker("eng");
     await worker.setParameters({
-      tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-      // Modo “una línea” suele ayudar para seriales
-      tessedit_pageseg_mode: "7"
+      tessedit_char_whitelist:"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+      tessedit_pageseg_mode:"7"
     });
     return worker;
   }
 
-  // ---------- Iniciar cámara ----------
   async function startCameraOnce(){
-    if(!selectedCut){
-      statusEl.textContent = "Primero elige el corte.";
-      return;
-    }
-
+    if(!selectedCut){ statusEl.textContent="Primero elige el corte."; return; }
     try{
       await initWorker();
-
-      statusEl.textContent = "Solicitando cámara…";
       try{
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode:"environment", width:{ideal:1280}, height:{ideal:720} },
-          audio:false
+          video:{ facingMode:"environment", width:{ideal:1920}, height:{ideal:1080} }, audio:false
         });
-      }catch(e1){
-        stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+      }catch{
+        stream = await navigator.mediaDevices.getUserMedia({video:true, audio:false});
       }
 
       video.srcObject = stream;
-      await new Promise(res => video.onloadedmetadata = res);
+      await new Promise(res=> video.onloadedmetadata=res);
       await video.play();
 
-      running = true;
-      busy = false;
-
+      running=true; busy=false;
       screenStart.classList.add("hidden");
-      topBar.style.display = "block";
-      video.style.display = "block";
-      roi.style.display = "block";
-      serialLabel.style.display = "block";
+      topBar.style.display="block";
+      powerBottom.style.display="block";
+      video.style.display="block";
+      roi.style.display="block";
+      serialLabel.style.display="block";
 
-      // reset
-      displayedCandidate = null;
-      displayedInList = null;
-      serialLabel.classList.remove("warn");
-      serialLabel.textContent = "Buscando…";
-      result.style.display = "none";
+      applyRoiPreset(roiPreset);
+
+      displayedCandidate=null;
+      displayedInList=null;
+      serialLabel.className="searching";
+      serialLabel.textContent="Buscando…";
+      result.style.display="none";
       resetPending();
-      nonBCount = 0;
+      nonBCount=0;
 
-      // primer resultado rápido
-      NEED_SAME = 2;
-
-      chip.textContent = "Corte: " + selectedCut;
-      statusEl.textContent = "✅ Cámara activa. Usa NUEVO ESCANEO para el siguiente billete.";
+      NEED_SAME=2;
+      startDots();
       scanLoop();
     }catch(e){
-      statusEl.textContent = "❌ Error iniciando: " + (e?.message || e);
+      statusEl.textContent="❌ Error iniciando: "+(e?.message||e);
       stopAll();
     }
   }
 
-  // ---------- Apagar cámara ----------
   function stopAll(){
-    running = false;
+    running=false; stopDots();
     try{ stream?.getTracks?.().forEach(t=>t.stop()); }catch(_){}
-    stream = null;
-    video.srcObject = null;
+    stream=null; video.srcObject=null;
 
-    video.style.display = "none";
-    roi.style.display = "none";
-    serialLabel.style.display = "none";
-    result.style.display = "none";
-    topBar.style.display = "none";
+    video.style.display="none";
+    roi.style.display="none";
+    serialLabel.style.display="none";
+    result.style.display="none";
+    topBar.style.display="none";
+    powerBottom.style.display="none";
     screenStart.classList.remove("hidden");
 
-    displayedCandidate = null;
-    displayedInList = null;
-    serialLabel.textContent = "—";
-    serialLabel.classList.remove("warn");
-    resetPending();
-    nonBCount = 0;
+    displayedCandidate=null; displayedInList=null;
+    serialLabel.textContent="—"; serialLabel.className="";
+    resetPending(); nonBCount=0;
 
-    statusEl.textContent = "Elige corte e inicia cámara.";
+    statusEl.textContent="Elige corte e inicia cámara.";
   }
 
-  // ---------- Nuevo escaneo (reinicia resultado, NO la cámara) ----------
   function newScan(){
-    displayedCandidate = null;
-    displayedInList = null;
-    serialLabel.classList.remove("warn");
-    serialLabel.textContent = "Buscando…";
-    result.style.display = "none";
+    displayedCandidate=null; displayedInList=null;
+    serialLabel.className="searching";
+    serialLabel.textContent="Buscando…";
+    result.style.display="none";
     resetPending();
-    nonBCount = 0;
-
-    // primer resultado del nuevo billete rápido
-    NEED_SAME = 2;
-
-    statusEl.textContent = "Nuevo escaneo… apunta el serial dentro del marco.";
+    nonBCount=0;
+    NEED_SAME=2;
+    startDots();
   }
 
-  // ---------- Loop OCR ----------
   async function scanLoop(){
     if(!running) return;
     setTimeout(scanLoop, OCR_INTERVAL);
     if(busy) return;
     if(!video.videoWidth || !video.videoHeight) return;
-    if(!selectedCut) return;
 
-    busy = true;
-
+    busy=true;
     try{
       frameCanvas.width = video.videoWidth;
       frameCanvas.height = video.videoHeight;
-      frameCtx.drawImage(video, 0, 0);
+      frameCtx.drawImage(video,0,0);
 
       const vb = video.getBoundingClientRect();
       const rb = roi.getBoundingClientRect();
       const sx = video.videoWidth / vb.width;
       const sy = video.videoHeight / vb.height;
 
-      let x = Math.floor((rb.left - vb.left) * sx);
-      let y = Math.floor((rb.top - vb.top) * sy);
-      let w = Math.floor(rb.width * sx);
-      let h = Math.floor(rb.height * sy);
+      let x = Math.floor((rb.left - vb.left)*sx);
+      let y = Math.floor((rb.top - vb.top)*sy);
+      let w = Math.floor(rb.width*sx);
+      let h = Math.floor(rb.height*sy);
 
-      x = Math.max(0, Math.min(x, video.videoWidth - 1));
-      y = Math.max(0, Math.min(y, video.videoHeight - 1));
-      w = Math.max(1, Math.min(w, video.videoWidth - x));
-      h = Math.max(1, Math.min(h, video.videoHeight - y));
+      x = Math.max(0, Math.min(x, video.videoWidth-1));
+      y = Math.max(0, Math.min(y, video.videoHeight-1));
+      w = Math.max(1, Math.min(w, video.videoWidth-x));
+      h = Math.max(1, Math.min(h, video.videoHeight-y));
 
-      const crop = frameCtx.getImageData(x, y, w, h);
-      cropCanvas.width = w;
-      cropCanvas.height = h;
-      cropCtx.putImageData(preprocess(crop), 0, 0);
+      // NUEVO: recorte interno (quita bordes distractores)
+      const padX = Math.floor(w * 0.06);
+      const padY = Math.floor(h * 0.18);
+      x += padX; y += padY;
+      w -= padX*2; h -= padY*2;
+      if(w < 20 || h < 20) return;
+
+      const crop = frameCtx.getImageData(x,y,w,h);
+
+      const scale = 2.2;
+      cropCanvas.width = Math.floor(w*scale);
+      cropCanvas.height = Math.floor(h*scale);
+
+      const tmp = document.createElement("canvas");
+      tmp.width=w; tmp.height=h;
+      tmp.getContext("2d").putImageData(preprocess(crop),0,0);
+      cropCtx.imageSmoothingEnabled=false;
+      cropCtx.drawImage(tmp,0,0,cropCanvas.width,cropCanvas.height);
 
       const { data } = await worker.recognize(cropCanvas);
-      const parsed = parseSerial(data?.text || "");
+      const parsed = parseSerial(data?.text||"");
 
-      // Si no detecta nada: mantenemos lo que ya estaba (número/símbolo/mensaje)
-      if(parsed.status === "none"){
+      if(parsed.status==="none"){
         return;
       }
 
-      // Encontró 9 dígitos + letra
-      const candidate = `${parsed.num} ${parsed.letter}`;
-
-      // Si la letra NO es B: mostrar “Serie no reconocida”
       if(parsed.letter !== "B"){
         nonBCount++;
-        if(nonBCount >= NONB_NEED){
-          serialLabel.classList.add("warn");
-          serialLabel.textContent = "Serie no reconocida";
-          // Mantener el símbolo del último número si existía (no lo tocamos)
+        if(nonBCount >= NONB_NEED && !displayedCandidate){
+          stopDots();
+          serialLabel.className="warn";
+          serialLabel.textContent="Serie no reconocida";
         }
         return;
       }
 
-      // Es B: resetea contador nonB
-      nonBCount = 0;
+      nonBCount=0;
 
-      // Confirmación 2 (rápido) / 3 (estable)
-      const confirmed = feedCandidate(`${parsed.num} B`);
-      if(!confirmed){
-        // No tocar lo fijado. Si todavía no hay nada fijado, muestra “Buscando…”
-        if(!displayedCandidate && !serialLabel.classList.contains("warn")){
-          serialLabel.textContent = "Buscando…";
-        }
-        return;
-      }
+      const candidate = `${parsed.num} B`;
+      const confirmed = feedCandidate(candidate);
+      if(!confirmed) return;
 
-      // Confirmado: fijamos
-      displayedCandidate = `${parsed.num} B`;
-      serialLabel.classList.remove("warn");
-      serialLabel.textContent = displayedCandidate;
+      displayedCandidate = candidate;
+      serialLabel.className="";
+      serialLabel.textContent=displayedCandidate;
+      stopDots();
 
       displayedInList = inRangesForCut_B(selectedCut, Number(parsed.num));
       showDecision(displayedInList);
 
-      statusEl.textContent =
-        `Corte ${selectedCut} · ${displayedCandidate} → ${displayedInList ? "EN LISTA (X)" : "NO EN LISTA (✓)"}`;
-
-      // luego del primer resultado, volvemos estable
       NEED_SAME = NEED_SAME_AFTER_FIRST;
-
-      // resetea para exigir N iguales para el próximo cambio
       resetPending();
 
-      if(displayedInList){
-        navigator.vibrate?.(120);
-      }
+      if(displayedInList){ navigator.vibrate?.(120); }
 
     } finally {
-      busy = false;
+      busy=false;
     }
   }
 
-  // Botones
   startBtn.addEventListener("click", startCameraOnce);
   powerBtn.addEventListener("click", stopAll);
   newBtn.addEventListener("click", newScan);
 
-  statusEl.textContent = "Elige corte e inicia cámara.";
+  statusEl.textContent="Elige corte e inicia cámara.";
 </script>
 </body>
 </html>
