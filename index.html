@@ -25,7 +25,7 @@
     display:none;
   }
 
-  /* Número detectado (ahora va ARRIBA del ROI) */
+  /* Número detectado (ARRIBA del ROI) */
   #serial{
     position:absolute;
     text-align:center;
@@ -36,7 +36,6 @@
     text-shadow: 0 2px 10px rgba(0,0,0,.7);
     pointer-events:none;
   }
-  #serial.warn{ color:#ffd60a; font-family:system-ui; font-size:18px; }
   #serial.searching{ font-family:system-ui; font-size:22px; opacity:.95; }
 
   /* Símbolo grande */
@@ -344,13 +343,15 @@
   let running = false;
   let busy = false;
 
+  // Mantengo la lógica de tiempos/estabilidad como venías usando
   const OCR_INTERVAL = 260;
-  let NEED_SAME = 2;
-  const NEED_SAME_AFTER_FIRST = 3;
+  let NEED_SAME = 2;                  // primer “fijado”
+  const NEED_SAME_AFTER_FIRST = 3;    // después más estable
+
   let pendingCandidate = null;
   let pendingCount = 0;
 
-  let displayedNumber = null;      // solo número
+  let displayedNumber = null;      // SOLO número (8 o 9 dígitos)
   let displayedMatch = null;       // {start,end} o null
 
   let dotsTimer = null;
@@ -363,7 +364,7 @@
   };
   let roiPreset = localStorage.getItem("roiPreset") || "S";
 
-  // Rutas de las tablas (sube estas imágenes al repo)
+  // Tablas (opcional: sube estas imágenes al repo)
   const TABLE_IMAGES = {
     "10": "tables/10.png",
     "20": "tables/20.png",
@@ -382,7 +383,7 @@
   }
   loadRanges().catch(()=>{});
 
-  // buscar rango en TODAS las letras (A/B/...)
+  // Busca rango en TODAS las letras (A/B/...) pero al OCR le ignoramos letras
   function findRangeForCut(cut, num){
     const cutObj = rangesData?.[cut];
     if(!cutObj) return null;
@@ -401,6 +402,7 @@
   }
 
   function resetPending(){ pendingCandidate=null; pendingCount=0; }
+
   function feedCandidate(candidate){
     if(candidate === pendingCandidate) pendingCount++;
     else { pendingCandidate=candidate; pendingCount=1; }
@@ -413,7 +415,6 @@
     dotsTimer = setInterval(()=>{
       if(!running) return;
       if(displayedNumber) return;
-      if(serialLabel.classList.contains("warn")) return;
       const dots = ".".repeat((dotsPhase % 3) + 1);
       serialLabel.textContent = "Buscando" + dots;
       dotsPhase++;
@@ -426,6 +427,7 @@
   const cropCanvas = document.createElement("canvas");
   const cropCtx = cropCanvas.getContext("2d",{willReadFrequently:true});
 
+  // Preprocess: lo mantenemos como venías (binariza para OCR)
   function preprocess(img){
     const d = img.data;
     let min=255, max=0;
@@ -444,21 +446,15 @@
     return img;
   }
 
-  function normalizeDigits(s){
-    return (s||"")
-      .replace(/O/g,"0").replace(/D/g,"0")
-      .replace(/I/g,"1").replace(/L/g,"1")
-      .replace(/Z/g,"2").replace(/S/g,"5");
-  }
-
-  // extraer SOLO 9 dígitos
+  // ✅ Parser SIN modificar números:
+  // Ignora letras simplemente extrayendo el primer grupo de 8 o 9 dígitos.
   function parseSerialNumber(text){
-    const t = (text||"").toUpperCase().replace(/[^\dA-Z]/g," ").replace(/\s+/g," ").trim();
-    const m = t.match(/(?:^|\s)([0-9A-Z]{9})(?:\s|$)/);
-    if(!m) return {status:"none"};
-    const num = normalizeDigits(m[1]);
-    if(!/^\d{9}$/.test(num)) return {status:"none"};
-    return {status:"found", num};
+    // Reemplaza todo lo que no sea dígito por espacios
+    const onlyDigits = (text || "").replace(/[^\d]/g, " ");
+    // Toma el primer grupo exacto de 8 o 9 dígitos
+    const m = onlyDigits.match(/\b(\d{8,9})\b/);
+    if(!m) return null;
+    return m[1]; // tal cual
   }
 
   function showDecision(match){
@@ -471,11 +467,9 @@
       resultText.className="small";
       resultText.textContent = `Rango: ${match.start} – ${match.end}`;
 
-      // hacer clickeable la X para abrir tabla
       result.style.pointerEvents = "auto";
       result.style.cursor = "pointer";
       result.title = "Toca para ver la tabla";
-
     } else {
       result.className="ok";
       result.textContent="✓";
@@ -518,7 +512,6 @@
     btn.addEventListener("click", ()=> setCut(btn.dataset.cut));
   });
 
-  // ROI dinámico + serial encima del ROI (sin chocar con top panel)
   function layoutROI(){
     if(!running) return;
 
@@ -548,9 +541,7 @@
     roi.style.width = roiW + "px";
     roi.style.height = roiH + "px";
 
-    // Número arriba del ROI:
-    // - preferimos arriba del marco
-    // - si no hay espacio, lo bajamos un poco pero sin chocar con el panel
+    // Texto del número arriba del ROI
     const desiredSerialTop = top - 42;
     const minSerialTop = Math.floor(topRect.bottom - wrapRect.top + 6);
     const serialTop = Math.max(minSerialTop, desiredSerialTop);
@@ -576,6 +567,7 @@
     if(worker) return worker;
     worker = await Tesseract.createWorker("eng");
     await worker.setParameters({
+      // Deja letras habilitadas (da igual), porque nosotros igual extraemos solo dígitos
       tessedit_char_whitelist:"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
       tessedit_pageseg_mode:"7"
     });
@@ -627,7 +619,7 @@
       scanLoop();
 
     }catch{
-      showToast("Toca INICIAR CÁMARA");
+      showToast("No se pudo iniciar cámara");
       stopAll();
     }
   }
@@ -651,7 +643,6 @@
     serialLabel.className="";
     resetPending();
 
-    // cerrar modal si estaba abierto
     closeTableModal();
   }
 
@@ -673,24 +664,21 @@
     if(!src) return;
 
     modalSerial.textContent = displayedNumber;
-    tableImg.src = src + "?v=" + Date.now(); // evita cache si reemplazas imágenes
+    tableImg.src = src + "?v=" + Date.now();
     tableModal.classList.add("show");
   }
   function closeTableModal(){
     tableModal.classList.remove("show");
-    // opcional: limpiar src para ahorrar memoria
-    // tableImg.src = "";
   }
 
   // Abrir modal tocando la X roja
   result.addEventListener("click", ()=>{
-    if(displayedMatch){ // solo si es X
+    if(displayedMatch){
       openTableModal();
     }
   });
   modalClose.addEventListener("click", closeTableModal);
   tableModal.addEventListener("click", (e)=>{
-    // si toca fuera del contenido, cerrar
     if(e.target === tableModal) closeTableModal();
   });
 
@@ -741,11 +729,11 @@
       cropCtx.drawImage(tmp,0,0,cropCanvas.width,cropCanvas.height);
 
       const { data } = await worker.recognize(cropCanvas);
-      const parsed = parseSerialNumber(data?.text||"");
 
-      if(parsed.status==="none") return;
+      // ✅ Mantener OCR “tal cual”: solo extraer 8 o 9 dígitos, ignorando letras.
+      const numStr = parseSerialNumber(data?.text || "");
+      if(!numStr) return;
 
-      const numStr = parsed.num;
       const confirmed = feedCandidate(numStr);
       if(!confirmed) return;
 
@@ -781,6 +769,7 @@
   window.addEventListener("resize", ()=> layoutROI());
   window.addEventListener("orientationchange", ()=> setTimeout(layoutROI, 150));
 
+  // Auto start si ya hay corte elegido (sin tener que apretar cada vez)
   async function autoStartIfPossible(){
     if(!selectedCut) return;
     try{ await startCamera(); }catch(_){}
