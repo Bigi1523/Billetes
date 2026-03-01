@@ -16,7 +16,6 @@
 
   video{ width:100%; height:100%; object-fit:cover; background:#000; display:none; }
 
-  /* ROI: posición se calcula por JS (top/left/width/height dinámicos) */
   #roi{
     position:absolute;
     border:4px solid var(--green);
@@ -40,7 +39,7 @@
 
   #result{
     position:absolute;
-    top:56%;
+    top:54%;
     left:50%;
     transform:translate(-50%,-50%);
     font-size:160px;
@@ -50,9 +49,30 @@
     user-select:none;
     pointer-events:none;
     opacity:.92;
+    text-align:center;
   }
   .ok{ color:var(--green); }
   .bad{ color:var(--red); }
+
+  /* Texto debajo del símbolo ✓ / X */
+  #resultText{
+    position:absolute;
+    top:calc(54% + 108px);
+    left:50%;
+    transform:translateX(-50%);
+    width:min(560px, 92vw);
+    text-align:center;
+    font-weight:900;
+    font-size:24px;
+    letter-spacing:.2px;
+    display:none;
+    text-shadow: 0 6px 14px rgba(0,0,0,.65);
+  }
+  #resultText.small{
+    font-size:18px;
+    font-weight:800;
+    opacity:.95;
+  }
 
   .screen{
     position:absolute; inset:0;
@@ -72,10 +92,7 @@
   .btnDark{ background:rgba(255,255,255,.10); color:#fff; }
   .btnBig{ width:min(440px, 92vw); padding:18px 22px; font-size:22px; }
 
-  .pressable:active{
-    transform: scale(0.985);
-    filter: brightness(1.08);
-  }
+  .pressable:active{ transform: scale(0.985); filter: brightness(1.08); }
 
   .cuts{ display:flex; gap:12px; width:min(440px, 92vw); justify-content:center; }
   .cutBtn{
@@ -172,13 +189,6 @@
     transition:opacity .18s ease;
   }
   #toast.show{ opacity:1; }
-
-  #status{
-    position:absolute; left:12px; right:12px; bottom:6px;
-    font-size:12px; opacity:.0; /* oculto */
-    white-space:pre-wrap;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
 </style>
 </head>
 
@@ -188,7 +198,9 @@
 
   <div id="roi"></div>
   <div id="serial" class="searching">Buscando…</div>
+
   <div id="result"></div>
+  <div id="resultText"></div>
 
   <div id="topBar">
     <div id="topPanel">
@@ -213,7 +225,6 @@
   </div>
 
   <div id="toast">Elegir corte</div>
-  <div id="status"></div>
 
   <div id="screenStart" class="screen">
     <div class="title">Elige el corte del billete</div>
@@ -232,6 +243,7 @@
   const roi = document.getElementById("roi");
   const serialLabel = document.getElementById("serial");
   const result = document.getElementById("result");
+  const resultText = document.getElementById("resultText");
   const topBar = document.getElementById("topBar");
   const powerBottom = document.getElementById("powerBottom");
 
@@ -254,18 +266,13 @@
   let pendingCandidate = null;
   let pendingCount = 0;
 
-  let displayedCandidate = null;
-  let displayedInList = null;
-
-  let nonBCount = 0;
-  const NONB_NEED = 2;
+  let displayedNumber = null;      // <-- solo número
+  let displayedMatch = null;       // {start,end} o null
 
   let dotsTimer = null;
   let dotsPhase = 0;
 
-  // ROI presets ahora son relativos al "espacio libre" (solo ratios)
   const ROI_PRESETS = {
-    // widthRatio, heightRatio dentro del área disponible
     S: { w: 0.62, h: 0.18 },
     M: { w: 0.72, h: 0.22 },
     L: { w: 0.82, h: 0.26 }
@@ -279,68 +286,29 @@
     showToast._t = setTimeout(()=>toast.classList.remove("show"), 900);
   }
 
-  // Calcula ROI para que NUNCA choque con topPanel ni con botón rojo
-  function layoutROI(){
-    if(!running) return;
-
-    const wrapRect = document.getElementById("wrap").getBoundingClientRect();
-    const topRect = topBar.getBoundingClientRect();
-    const bottomRect = powerBottom.getBoundingClientRect();
-
-    const safeTop = topRect.bottom + 12;     // margen bajo controles
-    const safeBottom = bottomRect.top - 12;  // margen sobre botón rojo
-
-    const availableTop = Math.max(wrapRect.top, safeTop);
-    const availableBottom = Math.min(wrapRect.bottom, safeBottom);
-
-    const availH = Math.max(120, availableBottom - availableTop);
-    const availW = wrapRect.width;
-
-    const preset = ROI_PRESETS[roiPreset] || ROI_PRESETS.S;
-
-    const roiW = Math.floor(availW * preset.w);
-    const roiH = Math.floor(availH * preset.h);
-
-    const left = Math.floor((availW - roiW) / 2);
-    const top = Math.floor(availableTop - wrapRect.top + (availH - roiH) * 0.12); // un poco hacia arriba
-
-    roi.style.left = left + "px";
-    roi.style.top = top + "px";
-    roi.style.width = roiW + "px";
-    roi.style.height = roiH + "px";
-
-    // label debajo del ROI, centrado
-    serialLabel.style.left = left + "px";
-    serialLabel.style.top = (top + roiH + 14) + "px";
-    serialLabel.style.width = roiW + "px";
+  async function loadRanges(){
+    rangesData = await fetch("ranges.json?v="+Date.now(), {cache:"no-store"}).then(r=>r.json());
   }
+  loadRanges().catch(()=>{});
 
-  function applyRoiPreset(p){
-    roiPreset = p;
-    localStorage.setItem("roiPreset", p);
-    document.querySelectorAll(".roiMini").forEach(b=>{
-      b.classList.toggle("active", b.dataset.roi === p);
-    });
-    layoutROI();
+  // ---------- IMPORTANTE: buscamos en TODAS las letras (A/B/...) ----------
+  function findRangeForCut(cut, num){
+    const cutObj = rangesData?.[cut];
+    if(!cutObj) return null;
+
+    // cutObj puede tener {"B":[...]} o {"A":[...], "B":[...]} etc.
+    const keys = Object.keys(cutObj);
+    for(const k of keys){
+      const list = cutObj[k];
+      if(!Array.isArray(list)) continue;
+      for(const r of list){
+        if(num >= r.start && num <= r.end){
+          return { start: r.start, end: r.end };
+        }
+      }
+    }
+    return null;
   }
-
-  document.querySelectorAll(".roiMini").forEach(b=>{
-    b.addEventListener("click", ()=> applyRoiPreset(b.dataset.roi));
-  });
-
-  function startDots(){
-    if(dotsTimer) return;
-    dotsPhase = 0;
-    dotsTimer = setInterval(()=>{
-      if(!running) return;
-      if(displayedCandidate) return;
-      if(serialLabel.classList.contains("warn")) return;
-      const dots = ".".repeat((dotsPhase % 3) + 1);
-      serialLabel.textContent = "Buscando" + dots;
-      dotsPhase++;
-    }, 350);
-  }
-  function stopDots(){ if(dotsTimer){ clearInterval(dotsTimer); dotsTimer=null; } }
 
   function resetPending(){ pendingCandidate=null; pendingCount=0; }
   function feedCandidate(candidate){
@@ -349,36 +317,19 @@
     return pendingCount >= NEED_SAME;
   }
 
-  async function loadRanges(){
-    rangesData = await fetch("ranges.json?v="+Date.now(), {cache:"no-store"}).then(r=>r.json());
+  function startDots(){
+    if(dotsTimer) return;
+    dotsPhase = 0;
+    dotsTimer = setInterval(()=>{
+      if(!running) return;
+      if(displayedNumber) return;
+      if(serialLabel.classList.contains("warn")) return;
+      const dots = ".".repeat((dotsPhase % 3) + 1);
+      serialLabel.textContent = "Buscando" + dots;
+      dotsPhase++;
+    }, 350);
   }
-  loadRanges().catch(()=>{});
-
-  function inRangesForCut_B(cut, num){
-    const list = rangesData?.[cut]?.["B"];
-    if(!list) return false;
-    for(const r of list){
-      if(num >= r.start && num <= r.end) return true;
-    }
-    return false;
-  }
-
-  function normalizeDigits(s){
-    return (s||"")
-      .replace(/O/g,"0").replace(/D/g,"0")
-      .replace(/I/g,"1").replace(/L/g,"1")
-      .replace(/Z/g,"2").replace(/S/g,"5");
-  }
-
-  function parseSerial(text){
-    const t = (text||"").toUpperCase().replace(/[^\dA-Z]/g," ").replace(/\s+/g," ").trim();
-    const m = t.match(/(?:^|\s)([0-9A-Z]{9})\s*([A-Z])(?:\s|$)/);
-    if(!m) return {status:"none"};
-    const num = normalizeDigits(m[1]);
-    const letter = m[2];
-    if(!/^\d{9}$/.test(num)) return {status:"none"};
-    return {status:"found", num, letter};
-  }
+  function stopDots(){ if(dotsTimer){ clearInterval(dotsTimer); dotsTimer=null; } }
 
   const frameCanvas = document.createElement("canvas");
   const frameCtx = frameCanvas.getContext("2d",{willReadFrequently:true});
@@ -403,6 +354,51 @@
     return img;
   }
 
+  function normalizeDigits(s){
+    return (s||"")
+      .replace(/O/g,"0").replace(/D/g,"0")
+      .replace(/I/g,"1").replace(/L/g,"1")
+      .replace(/Z/g,"2").replace(/S/g,"5");
+  }
+
+  // ---------- NUEVO: extraer SOLO 9 dígitos (ignora letra) ----------
+  function parseSerialNumber(text){
+    const t = (text||"").toUpperCase().replace(/[^\dA-Z]/g," ").replace(/\s+/g," ").trim();
+
+    // buscamos cualquier grupo de 9 chars (dígitos o letras que puedan confundirse) y lo normalizamos
+    const m = t.match(/(?:^|\s)([0-9A-Z]{9})(?:\s|$)/);
+    if(!m) return {status:"none"};
+
+    const num = normalizeDigits(m[1]);
+    if(!/^\d{9}$/.test(num)) return {status:"none"};
+    return {status:"found", num};
+  }
+
+  function showDecision(match){
+    // match != null => está en lista => X roja
+    result.style.display="block";
+    resultText.style.display="block";
+
+    if(match){
+      result.className="bad";
+      result.textContent="✕";
+      resultText.className="small";
+      resultText.textContent = `Rango: ${match.start} – ${match.end}`;
+    } else {
+      result.className="ok";
+      result.textContent="✓";
+      resultText.className="";
+      resultText.textContent = "Válido";
+    }
+  }
+
+  function clearDecision(){
+    result.style.display="none";
+    resultText.style.display="none";
+    result.textContent="";
+    resultText.textContent="";
+  }
+
   function setCut(cut){
     selectedCut = cut;
     localStorage.setItem("selectedCut", cut);
@@ -414,22 +410,61 @@
       b.classList.toggle("active", b.dataset.cut===selectedCut);
     });
 
-    if(running && displayedCandidate){
-      const shownNum = Number(displayedCandidate.split(" ")[0]);
-      displayedInList = inRangesForCut_B(selectedCut, shownNum);
-      showDecision(displayedInList);
+    // si ya hay número fijado, recalcula match
+    if(running && displayedNumber){
+      displayedMatch = findRangeForCut(selectedCut, Number(displayedNumber));
+      showDecision(displayedMatch);
     }
   }
-
   document.querySelectorAll("[data-cut]").forEach(btn=>{
     btn.addEventListener("click", ()=> setCut(btn.dataset.cut));
   });
 
-  function showDecision(isInList){
-    result.style.display="block";
-    if(isInList){ result.className="bad"; result.textContent="✕"; }
-    else { result.className="ok"; result.textContent="✓"; }
+  function layoutROI(){
+    if(!running) return;
+
+    const wrapRect = document.getElementById("wrap").getBoundingClientRect();
+    const topRect = topBar.getBoundingClientRect();
+    const bottomRect = powerBottom.getBoundingClientRect();
+
+    const safeTop = topRect.bottom + 12;
+    const safeBottom = bottomRect.top - 12;
+
+    const availableTop = Math.max(wrapRect.top, safeTop);
+    const availableBottom = Math.min(wrapRect.bottom, safeBottom);
+
+    const availH = Math.max(120, availableBottom - availableTop);
+    const availW = wrapRect.width;
+
+    const preset = ROI_PRESETS[roiPreset] || ROI_PRESETS.S;
+
+    const roiW = Math.floor(availW * preset.w);
+    const roiH = Math.floor(availH * preset.h);
+
+    const left = Math.floor((availW - roiW) / 2);
+    const top = Math.floor(availableTop - wrapRect.top + (availH - roiH) * 0.12);
+
+    roi.style.left = left + "px";
+    roi.style.top = top + "px";
+    roi.style.width = roiW + "px";
+    roi.style.height = roiH + "px";
+
+    serialLabel.style.left = left + "px";
+    serialLabel.style.top = (top + roiH + 14) + "px";
+    serialLabel.style.width = roiW + "px";
   }
+
+  function applyRoiPreset(p){
+    roiPreset = p;
+    localStorage.setItem("roiPreset", p);
+    document.querySelectorAll(".roiMini").forEach(b=>{
+      b.classList.toggle("active", b.dataset.roi === p);
+    });
+    layoutROI();
+  }
+  document.querySelectorAll(".roiMini").forEach(b=>{
+    b.addEventListener("click", ()=> applyRoiPreset(b.dataset.roi));
+  });
 
   async function initWorker(){
     if(worker) return worker;
@@ -472,23 +507,20 @@
       roi.style.display="block";
       serialLabel.style.display="block";
 
-      // asegurar layout luego de que los elementos ya estén visibles
-      requestAnimationFrame(()=>{ layoutROI(); });
+      requestAnimationFrame(()=> layoutROI());
 
-      displayedCandidate=null;
-      displayedInList=null;
+      displayedNumber=null;
+      displayedMatch=null;
       serialLabel.className="searching";
       serialLabel.textContent="Buscando…";
-      result.style.display="none";
+      clearDecision();
       resetPending();
-      nonBCount=0;
 
       NEED_SAME=2;
       startDots();
       scanLoop();
 
     }catch{
-      // iOS puede requerir gesto del usuario. Si falla, nos quedamos en pantalla inicial.
       showToast("Toca INICIAR CÁMARA");
       stopAll();
     }
@@ -502,24 +534,26 @@
     video.style.display="none";
     roi.style.display="none";
     serialLabel.style.display="none";
-    result.style.display="none";
+    clearDecision();
     topBar.style.display="none";
     powerBottom.style.display="none";
     screenStart.classList.remove("hidden");
 
-    displayedCandidate=null; displayedInList=null;
-    serialLabel.textContent="—"; serialLabel.className="";
-    resetPending(); nonBCount=0;
+    displayedNumber=null;
+    displayedMatch=null;
+    serialLabel.textContent="—";
+    serialLabel.className="";
+    resetPending();
   }
 
   function newScan(){
     navigator.vibrate?.(40);
-    displayedCandidate=null; displayedInList=null;
+    displayedNumber=null;
+    displayedMatch=null;
     serialLabel.className="searching";
     serialLabel.textContent="Buscando…";
-    result.style.display="none";
+    clearDecision();
     resetPending();
-    nonBCount=0;
     NEED_SAME=2;
     startDots();
   }
@@ -536,7 +570,6 @@
       frameCanvas.height = video.videoHeight;
       frameCtx.drawImage(video,0,0);
 
-      // ROI actual en pantalla => convertir a coords del video
       const vb = video.getBoundingClientRect();
       const rb = roi.getBoundingClientRect();
       const sx = video.videoWidth / vb.width;
@@ -552,7 +585,7 @@
       w = Math.max(1, Math.min(w, video.videoWidth-x));
       h = Math.max(1, Math.min(h, video.videoHeight-y));
 
-      // recorte interno (quita bordes distractores)
+      // recorte interno
       const padX = Math.floor(w * 0.06);
       const padY = Math.floor(h * 0.18);
       x += padX; y += padY;
@@ -572,38 +605,28 @@
       cropCtx.drawImage(tmp,0,0,cropCanvas.width,cropCanvas.height);
 
       const { data } = await worker.recognize(cropCanvas);
-      const parsed = parseSerial(data?.text||"");
+      const parsed = parseSerialNumber(data?.text||"");
 
       if(parsed.status==="none") return;
 
-      if(parsed.letter !== "B"){
-        nonBCount++;
-        if(nonBCount >= NONB_NEED && !displayedCandidate){
-          stopDots();
-          serialLabel.className="warn";
-          serialLabel.textContent="Serie no reconocida";
-        }
-        return;
-      }
-
-      nonBCount=0;
-
-      const candidate = `${parsed.num} B`;
-      const confirmed = feedCandidate(candidate);
+      const numStr = parsed.num; // "#########"
+      const confirmed = feedCandidate(numStr);
       if(!confirmed) return;
 
-      displayedCandidate = candidate;
+      displayedNumber = numStr;
       serialLabel.className="";
-      serialLabel.textContent=displayedCandidate;
+      serialLabel.textContent = displayedNumber; // solo número
       stopDots();
 
-      displayedInList = inRangesForCut_B(selectedCut, Number(parsed.num));
-      showDecision(displayedInList);
+      displayedMatch = findRangeForCut(selectedCut, Number(displayedNumber));
+      showDecision(displayedMatch);
 
       NEED_SAME = NEED_SAME_AFTER_FIRST;
       resetPending();
 
-      if(displayedInList){ navigator.vibrate?.(120); }
+      if(displayedMatch){
+        navigator.vibrate?.(120);
+      }
 
     } finally {
       busy=false;
@@ -615,20 +638,17 @@
   powerBtn.addEventListener("click", stopAll);
   newBtn.addEventListener("click", newScan);
 
-  // Inicial: activar corte guardado
+  // Inicial
   if(selectedCut) setCut(selectedCut);
-
-  // preset guardado
   applyRoiPreset(roiPreset);
 
-  // Recalcular layout si cambia el tamaño o rotación
   window.addEventListener("resize", ()=> layoutROI());
   window.addEventListener("orientationchange", ()=> setTimeout(layoutROI, 150));
 
-  // Auto-intento (best-effort)
+  // Auto-intento (best effort)
   async function autoStartIfPossible(){
     if(!selectedCut) return;
-    try{ await startCamera(); } catch(_){}
+    try{ await startCamera(); }catch(_){}
   }
   window.addEventListener("load", ()=> autoStartIfPossible());
   document.addEventListener("visibilitychange", ()=>{
