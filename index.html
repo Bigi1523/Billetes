@@ -25,6 +25,7 @@
     display:none;
   }
 
+  /* Número detectado (ahora va ARRIBA del ROI) */
   #serial{
     position:absolute;
     text-align:center;
@@ -33,13 +34,15 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     display:none;
     text-shadow: 0 2px 10px rgba(0,0,0,.7);
+    pointer-events:none;
   }
   #serial.warn{ color:#ffd60a; font-family:system-ui; font-size:18px; }
   #serial.searching{ font-family:system-ui; font-size:22px; opacity:.95; }
 
+  /* Símbolo grande */
   #result{
     position:absolute;
-    top:54%;
+    top:56%;
     left:50%;
     transform:translate(-50%,-50%);
     font-size:160px;
@@ -47,17 +50,18 @@
     display:none;
     text-shadow: 0 8px 18px rgba(0,0,0,.6);
     user-select:none;
-    pointer-events:none;
     opacity:.92;
     text-align:center;
+    cursor:default;
+    pointer-events:none; /* se habilita solo cuando es X */
   }
   .ok{ color:var(--green); }
   .bad{ color:var(--red); }
 
-  /* Texto debajo del símbolo ✓ / X */
+  /* Texto debajo del símbolo */
   #resultText{
     position:absolute;
-    top:calc(54% + 108px);
+    top:calc(56% + 108px);
     left:50%;
     transform:translateX(-50%);
     width:min(560px, 92vw);
@@ -91,7 +95,6 @@
   .btnRed{ background:var(--red); color:#fff; }
   .btnDark{ background:rgba(255,255,255,.10); color:#fff; }
   .btnBig{ width:min(440px, 92vw); padding:18px 22px; font-size:22px; }
-
   .pressable:active{ transform: scale(0.985); filter: brightness(1.08); }
 
   .cuts{ display:flex; gap:12px; width:min(440px, 92vw); justify-content:center; }
@@ -189,6 +192,69 @@
     transition:opacity .18s ease;
   }
   #toast.show{ opacity:1; }
+
+  /* ---------- MODAL TABLA ---------- */
+  #tableModal{
+    position:fixed;
+    inset:0;
+    background: rgba(0,0,0,.86);
+    display:none;
+    z-index:9999;
+  }
+  #tableModal.show{ display:block; }
+  #tableModalInner{
+    position:absolute;
+    inset: 0;
+    padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom)) 14px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  #tableHeader{
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 18px;
+    padding: 12px 12px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  #modalSerial{
+    font-weight:900;
+    font-size:20px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  #modalClose{
+    background: rgba(255,255,255,.12);
+    color:#fff;
+    border-radius:14px;
+    padding:10px 14px;
+    font-weight:900;
+    font-size:16px;
+  }
+  #tableImgWrap{
+    flex:1;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 18px;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  #tableImg{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    background:#000;
+  }
+  #modalHint{
+    text-align:center;
+    opacity:.8;
+    font-weight:800;
+    font-size:14px;
+  }
 </style>
 </head>
 
@@ -237,6 +303,20 @@
   </div>
 </div>
 
+<!-- MODAL TABLA -->
+<div id="tableModal">
+  <div id="tableModalInner">
+    <div id="tableHeader">
+      <div id="modalSerial">—</div>
+      <button id="modalClose" class="pressable">CERRAR</button>
+    </div>
+    <div id="tableImgWrap">
+      <img id="tableImg" alt="Tabla de rangos"/>
+    </div>
+    <div id="modalHint">Tabla del corte seleccionado</div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
   const video = document.getElementById("video");
@@ -246,12 +326,16 @@
   const resultText = document.getElementById("resultText");
   const topBar = document.getElementById("topBar");
   const powerBottom = document.getElementById("powerBottom");
-
   const screenStart = document.getElementById("screenStart");
   const startBtn = document.getElementById("startBtn");
   const newBtn = document.getElementById("newBtn");
   const powerBtn = document.getElementById("powerBtn");
   const toast = document.getElementById("toast");
+
+  const tableModal = document.getElementById("tableModal");
+  const modalSerial = document.getElementById("modalSerial");
+  const modalClose = document.getElementById("modalClose");
+  const tableImg = document.getElementById("tableImg");
 
   let selectedCut = localStorage.getItem("selectedCut") || null;
   let rangesData = {};
@@ -266,7 +350,7 @@
   let pendingCandidate = null;
   let pendingCount = 0;
 
-  let displayedNumber = null;      // <-- solo número
+  let displayedNumber = null;      // solo número
   let displayedMatch = null;       // {start,end} o null
 
   let dotsTimer = null;
@@ -278,6 +362,13 @@
     L: { w: 0.82, h: 0.26 }
   };
   let roiPreset = localStorage.getItem("roiPreset") || "S";
+
+  // Rutas de las tablas (sube estas imágenes al repo)
+  const TABLE_IMAGES = {
+    "10": "tables/10.png",
+    "20": "tables/20.png",
+    "50": "tables/50.png",
+  };
 
   function showToast(msg){
     toast.textContent = msg;
@@ -291,12 +382,11 @@
   }
   loadRanges().catch(()=>{});
 
-  // ---------- IMPORTANTE: buscamos en TODAS las letras (A/B/...) ----------
+  // buscar rango en TODAS las letras (A/B/...)
   function findRangeForCut(cut, num){
     const cutObj = rangesData?.[cut];
     if(!cutObj) return null;
 
-    // cutObj puede tener {"B":[...]} o {"A":[...], "B":[...]} etc.
     const keys = Object.keys(cutObj);
     for(const k of keys){
       const list = cutObj[k];
@@ -361,21 +451,17 @@
       .replace(/Z/g,"2").replace(/S/g,"5");
   }
 
-  // ---------- NUEVO: extraer SOLO 9 dígitos (ignora letra) ----------
+  // extraer SOLO 9 dígitos
   function parseSerialNumber(text){
     const t = (text||"").toUpperCase().replace(/[^\dA-Z]/g," ").replace(/\s+/g," ").trim();
-
-    // buscamos cualquier grupo de 9 chars (dígitos o letras que puedan confundirse) y lo normalizamos
     const m = t.match(/(?:^|\s)([0-9A-Z]{9})(?:\s|$)/);
     if(!m) return {status:"none"};
-
     const num = normalizeDigits(m[1]);
     if(!/^\d{9}$/.test(num)) return {status:"none"};
     return {status:"found", num};
   }
 
   function showDecision(match){
-    // match != null => está en lista => X roja
     result.style.display="block";
     resultText.style.display="block";
 
@@ -384,11 +470,21 @@
       result.textContent="✕";
       resultText.className="small";
       resultText.textContent = `Rango: ${match.start} – ${match.end}`;
+
+      // hacer clickeable la X para abrir tabla
+      result.style.pointerEvents = "auto";
+      result.style.cursor = "pointer";
+      result.title = "Toca para ver la tabla";
+
     } else {
       result.className="ok";
       result.textContent="✓";
       resultText.className="";
       resultText.textContent = "Válido";
+
+      result.style.pointerEvents = "none";
+      result.style.cursor = "default";
+      result.title = "";
     }
   }
 
@@ -397,6 +493,9 @@
     resultText.style.display="none";
     result.textContent="";
     resultText.textContent="";
+    result.style.pointerEvents="none";
+    result.style.cursor="default";
+    result.title="";
   }
 
   function setCut(cut){
@@ -410,7 +509,6 @@
       b.classList.toggle("active", b.dataset.cut===selectedCut);
     });
 
-    // si ya hay número fijado, recalcula match
     if(running && displayedNumber){
       displayedMatch = findRangeForCut(selectedCut, Number(displayedNumber));
       showDecision(displayedMatch);
@@ -420,6 +518,7 @@
     btn.addEventListener("click", ()=> setCut(btn.dataset.cut));
   });
 
+  // ROI dinámico + serial encima del ROI (sin chocar con top panel)
   function layoutROI(){
     if(!running) return;
 
@@ -442,15 +541,22 @@
     const roiH = Math.floor(availH * preset.h);
 
     const left = Math.floor((availW - roiW) / 2);
-    const top = Math.floor(availableTop - wrapRect.top + (availH - roiH) * 0.12);
+    const top = Math.floor(availableTop - wrapRect.top + (availH - roiH) * 0.18);
 
     roi.style.left = left + "px";
     roi.style.top = top + "px";
     roi.style.width = roiW + "px";
     roi.style.height = roiH + "px";
 
+    // Número arriba del ROI:
+    // - preferimos arriba del marco
+    // - si no hay espacio, lo bajamos un poco pero sin chocar con el panel
+    const desiredSerialTop = top - 42;
+    const minSerialTop = Math.floor(topRect.bottom - wrapRect.top + 6);
+    const serialTop = Math.max(minSerialTop, desiredSerialTop);
+
     serialLabel.style.left = left + "px";
-    serialLabel.style.top = (top + roiH + 14) + "px";
+    serialLabel.style.top = serialTop + "px";
     serialLabel.style.width = roiW + "px";
   }
 
@@ -544,6 +650,9 @@
     serialLabel.textContent="—";
     serialLabel.className="";
     resetPending();
+
+    // cerrar modal si estaba abierto
+    closeTableModal();
   }
 
   function newScan(){
@@ -557,6 +666,33 @@
     NEED_SAME=2;
     startDots();
   }
+
+  function openTableModal(){
+    if(!displayedNumber) return;
+    const src = TABLE_IMAGES[selectedCut];
+    if(!src) return;
+
+    modalSerial.textContent = displayedNumber;
+    tableImg.src = src + "?v=" + Date.now(); // evita cache si reemplazas imágenes
+    tableModal.classList.add("show");
+  }
+  function closeTableModal(){
+    tableModal.classList.remove("show");
+    // opcional: limpiar src para ahorrar memoria
+    // tableImg.src = "";
+  }
+
+  // Abrir modal tocando la X roja
+  result.addEventListener("click", ()=>{
+    if(displayedMatch){ // solo si es X
+      openTableModal();
+    }
+  });
+  modalClose.addEventListener("click", closeTableModal);
+  tableModal.addEventListener("click", (e)=>{
+    // si toca fuera del contenido, cerrar
+    if(e.target === tableModal) closeTableModal();
+  });
 
   async function scanLoop(){
     if(!running) return;
@@ -585,7 +721,7 @@
       w = Math.max(1, Math.min(w, video.videoWidth-x));
       h = Math.max(1, Math.min(h, video.videoHeight-y));
 
-      // recorte interno
+      // recorte interno (quita bordes)
       const padX = Math.floor(w * 0.06);
       const padY = Math.floor(h * 0.18);
       x += padX; y += padY;
@@ -609,13 +745,13 @@
 
       if(parsed.status==="none") return;
 
-      const numStr = parsed.num; // "#########"
+      const numStr = parsed.num;
       const confirmed = feedCandidate(numStr);
       if(!confirmed) return;
 
       displayedNumber = numStr;
       serialLabel.className="";
-      serialLabel.textContent = displayedNumber; // solo número
+      serialLabel.textContent = displayedNumber;
       stopDots();
 
       displayedMatch = findRangeForCut(selectedCut, Number(displayedNumber));
@@ -645,7 +781,6 @@
   window.addEventListener("resize", ()=> layoutROI());
   window.addEventListener("orientationchange", ()=> setTimeout(layoutROI, 150));
 
-  // Auto-intento (best effort)
   async function autoStartIfPossible(){
     if(!selectedCut) return;
     try{ await startCamera(); }catch(_){}
