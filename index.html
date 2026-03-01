@@ -10,7 +10,6 @@
     --green:#19ff5a;
     --red:#ff3b30;
     --panel: rgba(0,0,0,.62);
-    --panel2: rgba(255,255,255,.10);
   }
   body{ margin:0; background:#000; color:#fff; font-family:system-ui; overflow:hidden; }
   #wrap{ position:relative; width:100vw; height:100vh; }
@@ -22,7 +21,7 @@
     display:none;
   }
 
-  /* ROI */
+  /* Marco ROI */
   #roi{
     position:absolute;
     top:10%;
@@ -64,10 +63,10 @@
     pointer-events:none;
     opacity:.92;
   }
-  .ok{ color:var(--green); }
-  .bad{ color:var(--red); }
+  .ok{ color:var(--green); } /* ✓ */
+  .bad{ color:var(--red); }  /* X */
 
-  /* Pantallas */
+  /* Pantalla inicio */
   .screen{
     position:absolute;
     inset:0;
@@ -80,13 +79,7 @@
     background:#000;
   }
   .hidden{ display:none !important; }
-
-  .title{
-    font-size:22px;
-    font-weight:900;
-    text-align:center;
-    opacity:.95;
-  }
+  .title{ font-size:22px; font-weight:900; text-align:center; opacity:.95; }
 
   button{
     border:none;
@@ -95,18 +88,15 @@
     padding:16px 22px;
     font-size:20px;
   }
-
   .btnBig{
     width:min(440px, 92vw);
     padding:18px 22px;
     font-size:22px;
   }
-
   .btnGreen{ background:var(--green); color:#000; }
   .btnRed{ background:var(--red); color:#fff; }
-  .btnGhost{ background:rgba(255,255,255,.10); color:#fff; }
 
-  /* Selector corte */
+  /* Selector corte (pantalla inicio) */
   .cuts{
     display:flex;
     gap:12px;
@@ -128,27 +118,7 @@
     box-shadow: 0 0 0 3px rgba(25,255,90,.18) inset;
   }
 
-  /* Barra inferior */
-  #bottomBar{
-    position:absolute;
-    left:0; right:0;
-    bottom:22px;
-    display:flex;
-    justify-content:center;
-    pointer-events:auto;
-  }
-
-  #status{
-    position:absolute;
-    left:12px; right:12px;
-    bottom:6px;
-    font-size:12px;
-    opacity:.75;
-    white-space:pre-wrap;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-
-  /* Top bar en modo cámara */
+  /* Barra superior en modo cámara */
   #topBar{
     position:absolute;
     left:12px;
@@ -157,13 +127,8 @@
     display:none;
     gap:10px;
     align-items:center;
-    justify-content:space-between;
+    justify-content:flex-start;
     pointer-events:auto;
-  }
-  #topLeft{
-    display:flex;
-    gap:10px;
-    align-items:center;
   }
   #chip{
     background: var(--panel);
@@ -188,8 +153,26 @@
     font-size:16px;
     font-weight:900;
   }
-  .cutMini.active{
-    border-color: var(--green);
+  .cutMini.active{ border-color: var(--green); }
+
+  /* Barra inferior */
+  #bottomBar{
+    position:absolute;
+    left:0; right:0;
+    bottom:22px;
+    display:flex;
+    justify-content:center;
+    pointer-events:auto;
+  }
+
+  #status{
+    position:absolute;
+    left:12px; right:12px;
+    bottom:6px;
+    font-size:12px;
+    opacity:.78;
+    white-space:pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 </style>
 </head>
@@ -203,19 +186,17 @@
   <div id="result"></div>
 
   <div id="topBar">
-    <div id="topLeft">
-      <div id="chip">Corte: —</div>
-      <div id="cutsCam">
-        <button class="cutMini" data-cut="10">10</button>
-        <button class="cutMini" data-cut="20">20</button>
-        <button class="cutMini" data-cut="50">50</button>
-      </div>
+    <div id="chip">Corte: —</div>
+    <div id="cutsCam">
+      <button class="cutMini" data-cut="10">10</button>
+      <button class="cutMini" data-cut="20">20</button>
+      <button class="cutMini" data-cut="50">50</button>
     </div>
   </div>
 
   <div id="status"></div>
 
-  <!-- Screen: elegir corte + iniciar -->
+  <!-- Pantalla inicial -->
   <div id="screenStart" class="screen">
     <div class="title">Elige el corte del billete</div>
     <div class="cuts" id="cutsStart">
@@ -226,7 +207,6 @@
     <button id="startBtn" class="btnBig btnGreen" disabled>INICIAR CÁMARA</button>
   </div>
 
-  <!-- Bottom bar en modo cámara -->
   <div id="bottomBar" class="hidden">
     <button id="closeBtn" class="btnBig btnRed">CERRAR</button>
   </div>
@@ -235,7 +215,7 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
-  // -------- UI refs ----------
+  // ---------- UI ----------
   const video = document.getElementById("video");
   const roi = document.getElementById("roi");
   const serialLabel = document.getElementById("serial");
@@ -253,58 +233,74 @@
   video.muted = true;
   video.setAttribute("playsinline","");
 
-  // -------- State ----------
+  // ---------- Estado ----------
   let selectedCut = null; // "10" | "20" | "50"
   let rangesData = {};
   let worker = null;
   let stream = null;
   let running = false;
   let busy = false;
-  let freezeUntil = 0;
 
-  // Estabilización OCR
-  let lastCandidate = null;
-  let sameCount = 0;
-  const recent = [];
-  const RECENT_MAX = 5;
-  const NEED_CONSECUTIVE = 2;
-  const NEED_IN_WINDOW = 3;
+  // OCR timing
+  const OCR_INTERVAL = 450;
 
-  const OCR_INTERVAL = 500;
+  // Confirmación: 3 lecturas seguidas iguales
+  let pendingCandidate = null;
+  let pendingCount = 0;
+  const NEED_SAME = 3;
 
-  // -------- Load ranges ----------
+  // Persistencia: NO desaparece
+  let displayedCandidate = null;
+  let lastSeenMs = 0;
+  const GRACE_MS = 2500; // si se pierde OCR, mantenemos lo último por 2.5s
+
+  function resetPending(){
+    pendingCandidate = null;
+    pendingCount = 0;
+  }
+
+  // Devuelve true cuando candidate se repite NEED_SAME veces seguidas
+  function feedCandidate(candidate){
+    if(candidate === pendingCandidate) pendingCount++;
+    else { pendingCandidate = candidate; pendingCount = 1; }
+    return pendingCount >= NEED_SAME;
+  }
+
+  // ---------- Cargar rangos ----------
   async function loadRanges(){
     try{
       rangesData = await fetch("ranges.json?v=" + Date.now(), { cache:"no-store" }).then(r=>r.json());
-      statusEl.textContent = "Rangos cargados.";
+      statusEl.textContent = "Rangos cargados. Elige corte e inicia cámara.";
     }catch(e){
       statusEl.textContent = "❌ No pude cargar ranges.json.\n" + (e?.message || e);
     }
   }
   loadRanges();
 
-  // -------- Range check (no ordenado) ----------
-function inRangesForCut(cut, num){
-  const list = rangesData[cut]?.["B"];
-  if(!list) return false;
-  for(const r of list){
-    if(num >= r.start && num <= r.end) return true;
+  // ---------- Rangos: corte -> "B" -> lista ----------
+  function inRangesForCut_B(cut, num){
+    const list = rangesData?.[cut]?.["B"];
+    if(!list) return false;
+    for(const r of list){
+      if(num >= r.start && num <= r.end) return true;
+    }
+    return false;
   }
-  return false;
-}
-  // -------- Extractor: SOLO 9 dígitos + B ----------
+
+  // ---------- Extractor: 9 dígitos + B ----------
   function extract(text){
     const t = (text || "").toUpperCase()
       .replace(/[^\dA-Z]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
 
+    // 9 dígitos + B (espacio opcional)
     const m = t.match(/(?:^|\s)(\d{9})\s*B(?:\s|$)/);
     if(!m) return null;
     return { num: m[1], letter: "B", cleaned: t };
   }
 
-  // -------- Canvas + preprocess ----------
+  // ---------- Canvas + preprocesado ----------
   const frameCanvas = document.createElement("canvas");
   const frameCtx = frameCanvas.getContext("2d",{ willReadFrequently:true });
   const cropCanvas = document.createElement("canvas");
@@ -322,47 +318,34 @@ function inRangesForCut(cut, num){
     return img;
   }
 
-  // -------- Stabilization helpers ----------
-  function pushRecent(s){
-    recent.push(s);
-    if(recent.length > RECENT_MAX) recent.shift();
-  }
-  function countInRecent(s){
-    let c=0;
-    for(const x of recent) if(x===s) c++;
-    return c;
-  }
-  function isStable(){
-    return sameCount >= NEED_CONSECUTIVE || (lastCandidate && countInRecent(lastCandidate) >= NEED_IN_WINDOW);
-  }
-  function resetStabilization(){
-    lastCandidate = null;
-    sameCount = 0;
-    recent.length = 0;
-  }
-
-  // -------- Cut selection (start screen + camera screen) ----------
+  // ---------- UI: selección de corte ----------
   function setCut(cut){
     selectedCut = cut;
     startBtn.disabled = !selectedCut;
 
-    // botones de pantalla inicial
+    // botones pantalla inicio
     document.querySelectorAll("#cutsStart .cutBtn").forEach(b=>{
       b.classList.toggle("active", b.dataset.cut === selectedCut);
     });
-
-    // botones mini en cámara
+    // botones cámara
     document.querySelectorAll("#cutsCam .cutMini").forEach(b=>{
       b.classList.toggle("active", b.dataset.cut === selectedCut);
     });
 
     chip.textContent = "Corte: " + selectedCut;
 
-    // al cambiar de corte en modo cámara, ocultamos el símbolo hasta que haya lectura estable del nuevo corte
+    // si estamos escaneando, no reiniciamos cámara, solo reiniciamos la confirmación
     if(running){
-      result.style.display = "none";
-      resetStabilization();
-      statusEl.textContent = `Corte cambiado a ${selectedCut}.`;
+      resetPending();
+      // no borres el número mostrado; solo recalcula el símbolo si ya hay displayedCandidate
+      if(displayedCandidate){
+        const shownNum = Number(displayedCandidate.split(" ")[0]);
+        const inList = inRangesForCut_B(selectedCut, shownNum);
+        showDecision(inList);
+        statusEl.textContent = `Corte cambiado a ${selectedCut}. Manteniendo ${displayedCandidate}.`;
+      }else{
+        statusEl.textContent = `Corte cambiado a ${selectedCut}.`;
+      }
     }
   }
 
@@ -370,7 +353,19 @@ function inRangesForCut(cut, num){
     btn.addEventListener("click", ()=> setCut(btn.dataset.cut));
   });
 
-  // -------- Worker ----------
+  // ---------- Mostrar símbolo (IN LISTA = X roja; NO EN LISTA = ✓ verde) ----------
+  function showDecision(isInList){
+    result.style.display = "block";
+    if(isInList){
+      result.className = "bad";
+      result.textContent = "✕";
+    } else {
+      result.className = "ok";
+      result.textContent = "✓";
+    }
+  }
+
+  // ---------- OCR worker ----------
   async function initWorker(){
     if(worker) return worker;
     statusEl.textContent = "Cargando OCR…";
@@ -381,7 +376,7 @@ function inRangesForCut(cut, num){
     return worker;
   }
 
-  // -------- Start camera once ----------
+  // ---------- Iniciar cámara una sola vez ----------
   async function startCameraOnce(){
     if(!selectedCut){
       statusEl.textContent = "Primero elige el corte.";
@@ -390,8 +385,8 @@ function inRangesForCut(cut, num){
 
     try{
       await initWorker();
-      statusEl.textContent = "Solicitando cámara…";
 
+      statusEl.textContent = "Solicitando cámara…";
       try{
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode:"environment", width:{ideal:1280}, height:{ideal:720} },
@@ -407,10 +402,8 @@ function inRangesForCut(cut, num){
 
       running = true;
       busy = false;
-      freezeUntil = 0;
-      resetStabilization();
 
-      // UI switch: show camera
+      // UI a modo cámara
       screenStart.classList.add("hidden");
       bottomBar.classList.remove("hidden");
       topBar.style.display = "flex";
@@ -419,9 +412,13 @@ function inRangesForCut(cut, num){
       roi.style.display = "block";
       serialLabel.style.display = "block";
 
-      chip.textContent = "Corte: " + selectedCut;
+      // reset
+      displayedCandidate = null;
+      lastSeenMs = 0;
+      resetPending();
 
-      statusEl.textContent = "✅ Cámara activa. Puedes cambiar 10/20/50 arriba sin reiniciar.";
+      chip.textContent = "Corte: " + selectedCut;
+      statusEl.textContent = "✅ Cámara activa. Cambia 10/20/50 arriba sin reiniciar.";
       scanLoop();
     }catch(e){
       statusEl.textContent =
@@ -432,13 +429,14 @@ function inRangesForCut(cut, num){
     }
   }
 
+  // ---------- Cerrar ----------
   function stopAll(){
     running = false;
     try{ stream?.getTracks?.().forEach(t=>t.stop()); }catch(_){}
     stream = null;
     video.srcObject = null;
 
-    // UI back to start
+    // UI back
     video.style.display = "none";
     roi.style.display = "none";
     serialLabel.style.display = "none";
@@ -447,19 +445,18 @@ function inRangesForCut(cut, num){
     bottomBar.classList.add("hidden");
     screenStart.classList.remove("hidden");
 
+    // reset
+    displayedCandidate = null;
     serialLabel.textContent = "—";
-    resetStabilization();
-    freezeUntil = 0;
-    statusEl.textContent = "Listo. Elige corte e inicia cámara.";
+    resetPending();
+    statusEl.textContent = "Elige corte e inicia cámara.";
   }
 
-  // -------- OCR loop ----------
+  // ---------- Loop OCR ----------
   async function scanLoop(){
     if(!running) return;
     setTimeout(scanLoop, OCR_INTERVAL);
-
     if(busy) return;
-    if(Date.now() < freezeUntil) return;
     if(!video.videoWidth || !video.videoHeight) return;
     if(!selectedCut) return;
 
@@ -492,48 +489,60 @@ function inRangesForCut(cut, num){
 
       const { data } = await worker.recognize(cropCanvas);
       const serial = extract(data?.text || "");
+      const now = Date.now();
 
+      // Si no detecta, NO borres lo mostrado
       if(!serial){
-        serialLabel.textContent = "—";
-        result.style.display = "none";
-        resetStabilization();
+        if(displayedCandidate && (now - lastSeenMs) > GRACE_MS){
+          // opcional: ocultar símbolo si se pierde mucho tiempo
+          result.style.display = "none";
+          statusEl.textContent = `Sin lectura… (manteniendo ${displayedCandidate})`;
+        }
         return;
       }
+
+      // Vimos algo válido (B + 9 dígitos)
+      lastSeenMs = now;
 
       const candidate = `${serial.num} B`;
-      serialLabel.textContent = candidate;
 
-      pushRecent(candidate);
-      if(candidate === lastCandidate) sameCount++;
-      else { lastCandidate = candidate; sameCount = 1; }
+      // Confirmación por 3 lecturas iguales seguidas
+      const confirmed = feedCandidate(candidate);
 
-      if(!isStable()){
-        result.style.display = "none";
+      if(!confirmed){
+        // NO cambiar lo mostrado todavía
+        statusEl.textContent = `Leyendo… ${candidate} (${pendingCount}/${NEED_SAME})`;
         return;
       }
 
-      const ok = inRangesForCut(selectedCut, Number(serial.num));
+      // Confirmado: ahora sí actualizamos lo mostrado fijo
+      displayedCandidate = candidate;
+      serialLabel.textContent = displayedCandidate;
 
-      result.style.display = "block";
-      result.className = ok ? "ok" : "bad";
-      result.textContent = ok ? "✓" : "✕";
+      const inList = inRangesForCut_B(selectedCut, Number(serial.num));
+      showDecision(inList);
 
-      statusEl.textContent = `Corte ${selectedCut} · ${candidate} → ${ok ? "EN RANGO" : "fuera de rango"}`;
+      statusEl.textContent =
+        `Corte ${selectedCut} · ${displayedCandidate} → ${inList ? "EN LISTA (X)" : "NO EN LISTA (✓)"}`;
 
-      if(ok){
-        navigator.vibrate?.(200);
-        freezeUntil = Date.now() + 1200;
+      // opcional vibración cuando está EN LISTA
+      if(inList){
+        navigator.vibrate?.(120);
       }
+
+      // Resetea para exigir 3 iguales para el próximo cambio
+      resetPending();
+
     } finally {
       busy = false;
     }
   }
 
-  // Buttons
+  // Botones
   startBtn.addEventListener("click", startCameraOnce);
   closeBtn.addEventListener("click", stopAll);
 
-  // Initial
+  // Init
   statusEl.textContent = "Elige corte e inicia cámara.";
 </script>
 </body>
