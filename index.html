@@ -16,13 +16,9 @@
 
   video{ width:100%; height:100%; object-fit:cover; background:#000; display:none; }
 
-  /* ROI (por defecto pequeño) */
+  /* ROI: posición se calcula por JS (top/left/width/height dinámicos) */
   #roi{
     position:absolute;
-    top:22%;
-    right:10%;
-    width:62%;
-    height:12%;
     border:4px solid var(--green);
     border-radius:16px;
     box-shadow:0 0 0 9999px rgba(0,0,0,.32);
@@ -32,9 +28,6 @@
 
   #serial{
     position:absolute;
-    top:calc(22% + 12% + 14px);
-    right:10%;
-    width:62%;
     text-align:center;
     font-size:22px;
     font-weight:900;
@@ -79,7 +72,6 @@
   .btnDark{ background:rgba(255,255,255,.10); color:#fff; }
   .btnBig{ width:min(440px, 92vw); padding:18px 22px; font-size:22px; }
 
-  /* Press feedback */
   .pressable:active{
     transform: scale(0.985);
     filter: brightness(1.08);
@@ -103,7 +95,6 @@
     align-items:center;
   }
 
-  /* NUEVO ESCANEO centrado arriba */
   #newBtn{
     width:min(520px, 92vw);
     font-size:22px;
@@ -111,7 +102,6 @@
     border-radius:26px;
   }
 
-  /* Cortes centrados */
   #cutsCam{
     display:flex; gap:10px;
     background:rgba(255,255,255,.08);
@@ -131,7 +121,6 @@
   }
   .cutMini.active{ border-color:var(--green); }
 
-  /* Tamaño ventana centrado sin texto ROI */
   #roiSizeRow{
     display:flex; gap:10px;
     background:rgba(255,255,255,.08);
@@ -151,7 +140,6 @@
   }
   .roiMini.active{ border-color:var(--green); }
 
-  /* APAGAR CÁMARA más arriba y respetando safe-area */
   #powerBottom{
     position:absolute;
     left:50%;
@@ -187,7 +175,8 @@
 
   #status{
     position:absolute; left:12px; right:12px; bottom:6px;
-    font-size:12px; opacity:.55; white-space:pre-wrap;
+    font-size:12px; opacity:.0; /* oculto */
+    white-space:pre-wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 </style>
@@ -211,8 +200,8 @@
         <button class="cutMini pressable" data-cut="50">50</button>
       </div>
 
-      <div id="roiSizeRow" title="Tamaño de ventana">
-        <button class="roiMini pressable active" data-roi="S">Pequeño</button>
+      <div id="roiSizeRow">
+        <button class="roiMini pressable" data-roi="S">Pequeño</button>
         <button class="roiMini pressable" data-roi="M">Mediano</button>
         <button class="roiMini pressable" data-roi="L">Grande</button>
       </div>
@@ -243,7 +232,6 @@
   const roi = document.getElementById("roi");
   const serialLabel = document.getElementById("serial");
   const result = document.getElementById("result");
-  const statusEl = document.getElementById("status");
   const topBar = document.getElementById("topBar");
   const powerBottom = document.getElementById("powerBottom");
 
@@ -253,10 +241,6 @@
   const powerBtn = document.getElementById("powerBtn");
   const toast = document.getElementById("toast");
 
-  video.autoplay = true;
-  video.muted = true;
-  video.setAttribute("playsinline","");
-
   let selectedCut = localStorage.getItem("selectedCut") || null;
   let rangesData = {};
   let worker = null;
@@ -265,7 +249,6 @@
   let busy = false;
 
   const OCR_INTERVAL = 260;
-
   let NEED_SAME = 2;
   const NEED_SAME_AFTER_FIRST = 3;
   let pendingCandidate = null;
@@ -280,10 +263,12 @@
   let dotsTimer = null;
   let dotsPhase = 0;
 
+  // ROI presets ahora son relativos al "espacio libre" (solo ratios)
   const ROI_PRESETS = {
-    S: { top:"22%", right:"10%", width:"62%", height:"12%" },
-    M: { top:"21%", right:"8%",  width:"70%", height:"14%" },
-    L: { top:"20%", right:"5%",  width:"78%", height:"16%" }
+    // widthRatio, heightRatio dentro del área disponible
+    S: { w: 0.62, h: 0.18 },
+    M: { w: 0.72, h: 0.22 },
+    L: { w: 0.82, h: 0.26 }
   };
   let roiPreset = localStorage.getItem("roiPreset") || "S";
 
@@ -294,22 +279,49 @@
     showToast._t = setTimeout(()=>toast.classList.remove("show"), 900);
   }
 
+  // Calcula ROI para que NUNCA choque con topPanel ni con botón rojo
+  function layoutROI(){
+    if(!running) return;
+
+    const wrapRect = document.getElementById("wrap").getBoundingClientRect();
+    const topRect = topBar.getBoundingClientRect();
+    const bottomRect = powerBottom.getBoundingClientRect();
+
+    const safeTop = topRect.bottom + 12;     // margen bajo controles
+    const safeBottom = bottomRect.top - 12;  // margen sobre botón rojo
+
+    const availableTop = Math.max(wrapRect.top, safeTop);
+    const availableBottom = Math.min(wrapRect.bottom, safeBottom);
+
+    const availH = Math.max(120, availableBottom - availableTop);
+    const availW = wrapRect.width;
+
+    const preset = ROI_PRESETS[roiPreset] || ROI_PRESETS.S;
+
+    const roiW = Math.floor(availW * preset.w);
+    const roiH = Math.floor(availH * preset.h);
+
+    const left = Math.floor((availW - roiW) / 2);
+    const top = Math.floor(availableTop - wrapRect.top + (availH - roiH) * 0.12); // un poco hacia arriba
+
+    roi.style.left = left + "px";
+    roi.style.top = top + "px";
+    roi.style.width = roiW + "px";
+    roi.style.height = roiH + "px";
+
+    // label debajo del ROI, centrado
+    serialLabel.style.left = left + "px";
+    serialLabel.style.top = (top + roiH + 14) + "px";
+    serialLabel.style.width = roiW + "px";
+  }
+
   function applyRoiPreset(p){
     roiPreset = p;
     localStorage.setItem("roiPreset", p);
-    const s = ROI_PRESETS[p];
-    roi.style.top = s.top;
-    roi.style.right = s.right;
-    roi.style.width = s.width;
-    roi.style.height = s.height;
-
-    serialLabel.style.top = `calc(${s.top} + ${s.height} + 14px)`;
-    serialLabel.style.right = s.right;
-    serialLabel.style.width = s.width;
-
     document.querySelectorAll(".roiMini").forEach(b=>{
       b.classList.toggle("active", b.dataset.roi === p);
     });
+    layoutROI();
   }
 
   document.querySelectorAll(".roiMini").forEach(b=>{
@@ -338,14 +350,9 @@
   }
 
   async function loadRanges(){
-    try{
-      rangesData = await fetch("ranges.json?v="+Date.now(), {cache:"no-store"}).then(r=>r.json());
-      statusEl.textContent = "";
-    }catch(e){
-      statusEl.textContent = "❌ No pude cargar ranges.json.\n"+(e?.message||e);
-    }
+    rangesData = await fetch("ranges.json?v="+Date.now(), {cache:"no-store"}).then(r=>r.json());
   }
-  loadRanges();
+  loadRanges().catch(()=>{});
 
   function inRangesForCut_B(cut, num){
     const list = rangesData?.[cut]?.["B"];
@@ -407,7 +414,6 @@
       b.classList.toggle("active", b.dataset.cut===selectedCut);
     });
 
-    // si ya hay número fijado, recalcula símbolo
     if(running && displayedCandidate){
       const shownNum = Number(displayedCandidate.split(" ")[0]);
       displayedInList = inRangesForCut_B(selectedCut, shownNum);
@@ -466,7 +472,8 @@
       roi.style.display="block";
       serialLabel.style.display="block";
 
-      applyRoiPreset(roiPreset);
+      // asegurar layout luego de que los elementos ya estén visibles
+      requestAnimationFrame(()=>{ layoutROI(); });
 
       displayedCandidate=null;
       displayedInList=null;
@@ -480,8 +487,9 @@
       startDots();
       scanLoop();
 
-    }catch(e){
-      statusEl.textContent="❌ Error iniciando: "+(e?.message||e);
+    }catch{
+      // iOS puede requerir gesto del usuario. Si falla, nos quedamos en pantalla inicial.
+      showToast("Toca INICIAR CÁMARA");
       stopAll();
     }
   }
@@ -505,9 +513,7 @@
   }
 
   function newScan(){
-    // feedback
     navigator.vibrate?.(40);
-
     displayedCandidate=null; displayedInList=null;
     serialLabel.className="searching";
     serialLabel.textContent="Buscando…";
@@ -530,6 +536,7 @@
       frameCanvas.height = video.videoHeight;
       frameCtx.drawImage(video,0,0);
 
+      // ROI actual en pantalla => convertir a coords del video
       const vb = video.getBoundingClientRect();
       const rb = roi.getBoundingClientRect();
       const sx = video.videoWidth / vb.width;
@@ -567,9 +574,7 @@
       const { data } = await worker.recognize(cropCanvas);
       const parsed = parseSerial(data?.text||"");
 
-      if(parsed.status==="none"){
-        return;
-      }
+      if(parsed.status==="none") return;
 
       if(parsed.letter !== "B"){
         nonBCount++;
@@ -610,37 +615,25 @@
   powerBtn.addEventListener("click", stopAll);
   newBtn.addEventListener("click", newScan);
 
-  // Estado inicial UI: marcar corte guardado si existe
-  if(selectedCut){
-    setCut(selectedCut);
-  }
+  // Inicial: activar corte guardado
+  if(selectedCut) setCut(selectedCut);
+
+  // preset guardado
   applyRoiPreset(roiPreset);
 
-  // Auto-intento de iniciar cámara (si el browser lo permite)
-  // - si ya hay corte elegido
-  // - y si el usuario ya dio permisos antes
+  // Recalcular layout si cambia el tamaño o rotación
+  window.addEventListener("resize", ()=> layoutROI());
+  window.addEventListener("orientationchange", ()=> setTimeout(layoutROI, 150));
+
+  // Auto-intento (best-effort)
   async function autoStartIfPossible(){
     if(!selectedCut) return;
-    if(!navigator.mediaDevices?.getUserMedia) return;
-    try{
-      // En iOS a veces esto falla sin “gesture”. Igual intentamos.
-      await startCamera();
-    }catch(_){}
+    try{ await startCamera(); } catch(_){}
   }
-
-  // intenta al cargar
-  window.addEventListener("load", ()=> {
-    // si quieres desactivar autoStart: comenta la línea de abajo
-    autoStartIfPossible();
-  });
-
-  // intenta al volver a la pestaña
+  window.addEventListener("load", ()=> autoStartIfPossible());
   document.addEventListener("visibilitychange", ()=>{
-    if(document.visibilityState === "visible"){
-      // si estaba apagada, intentamos reactivar (best-effort)
-      if(!running){
-        autoStartIfPossible();
-      }
+    if(document.visibilityState === "visible" && !running){
+      autoStartIfPossible();
     }
   });
 </script>
