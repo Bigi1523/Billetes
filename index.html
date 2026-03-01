@@ -16,7 +16,7 @@
 
   video{ width:100%; height:100%; object-fit:cover; background:#000; display:none; }
 
-  /* ROI: ahora más pequeño (por defecto) */
+  /* ROI (por defecto pequeño) */
   #roi{
     position:absolute;
     top:22%;
@@ -72,11 +72,18 @@
   button{
     border:none; border-radius:20px;
     font-weight:900; padding:14px 18px; font-size:18px;
+    -webkit-tap-highlight-color: transparent;
   }
   .btnGreen{ background:var(--green); color:#000; }
   .btnRed{ background:var(--red); color:#fff; }
   .btnDark{ background:rgba(255,255,255,.10); color:#fff; }
   .btnBig{ width:min(440px, 92vw); padding:18px 22px; font-size:22px; }
+
+  /* Press feedback */
+  .pressable:active{
+    transform: scale(0.985);
+    filter: brightness(1.08);
+  }
 
   .cuts{ display:flex; gap:12px; width:min(440px, 92vw); justify-content:center; }
   .cutBtn{
@@ -91,48 +98,96 @@
     display:none; pointer-events:auto;
   }
   #topPanel{
-    background:var(--panel); border-radius:22px; padding:10px;
-    display:flex; gap:12px; align-items:flex-start;
+    background:var(--panel); border-radius:22px; padding:12px;
+    display:flex; flex-direction:column; gap:10px;
+    align-items:center;
   }
-  #chip{
-    padding:10px 12px; border-radius:16px; font-weight:900; font-size:14px;
-    white-space:nowrap; background:rgba(255,255,255,.10);
+
+  /* NUEVO ESCANEO centrado arriba */
+  #newBtn{
+    width:min(520px, 92vw);
+    font-size:22px;
+    padding:18px 22px;
+    border-radius:26px;
   }
-  #topControls{ display:flex; flex-direction:column; gap:10px; flex:1; }
+
+  /* Cortes centrados */
   #cutsCam{
-    display:flex; gap:8px; background:rgba(255,255,255,.08);
-    padding:8px; border-radius:18px; width:max-content;
+    display:flex; gap:10px;
+    background:rgba(255,255,255,.08);
+    padding:10px; border-radius:20px;
+    justify-content:center;
+    width:min(520px, 92vw);
   }
   .cutMini{
-    background:rgba(0,0,0,.20); border:2px solid rgba(255,255,255,.10); color:#fff;
-    border-radius:14px; padding:8px 12px; font-size:16px; font-weight:900;
+    flex:1;
+    background:rgba(0,0,0,.20);
+    border:2px solid rgba(255,255,255,.10);
+    color:#fff;
+    border-radius:16px;
+    padding:10px 0;
+    font-size:18px;
+    font-weight:900;
   }
   .cutMini.active{ border-color:var(--green); }
 
-  /* Selector ROI (opcional) */
+  /* Tamaño ventana centrado sin texto ROI */
   #roiSizeRow{
-    display:flex; gap:8px;
+    display:flex; gap:10px;
     background:rgba(255,255,255,.08);
-    padding:8px; border-radius:18px; width:max-content;
+    padding:10px; border-radius:20px;
+    justify-content:center;
+    width:min(520px, 92vw);
   }
   .roiMini{
-    background:rgba(0,0,0,.20); border:2px solid rgba(255,255,255,.10); color:#fff;
-    border-radius:14px; padding:8px 10px; font-size:14px; font-weight:900;
+    flex:1;
+    background:rgba(0,0,0,.20);
+    border:2px solid rgba(255,255,255,.10);
+    color:#fff;
+    border-radius:16px;
+    padding:10px 0;
+    font-size:16px;
+    font-weight:900;
   }
   .roiMini.active{ border-color:var(--green); }
 
+  /* APAGAR CÁMARA más arriba y respetando safe-area */
   #powerBottom{
-    position:absolute; left:50%; transform:translateX(-50%);
-    bottom:24px; width:min(520px, 92vw);
-    display:none; pointer-events:auto;
+    position:absolute;
+    left:50%;
+    transform:translateX(-50%);
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    width:min(520px, 92vw);
+    display:none;
+    pointer-events:auto;
   }
   #powerBottom button{
-    width:100%; padding:18px 22px; font-size:22px; border-radius:26px;
+    width:100%;
+    padding:18px 22px;
+    font-size:22px;
+    border-radius:26px;
   }
+
+  #toast{
+    position:absolute;
+    left:50%;
+    transform:translateX(-50%);
+    top: 10px;
+    background: rgba(0,0,0,.72);
+    border: 1px solid rgba(255,255,255,.14);
+    padding:10px 14px;
+    border-radius:14px;
+    font-weight:800;
+    font-size:14px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .18s ease;
+  }
+  #toast.show{ opacity:1; }
 
   #status{
     position:absolute; left:12px; right:12px; bottom:6px;
-    font-size:12px; opacity:.65; white-space:pre-wrap;
+    font-size:12px; opacity:.55; white-space:pre-wrap;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 </style>
@@ -148,40 +203,37 @@
 
   <div id="topBar">
     <div id="topPanel">
-      <div id="chip">Corte: —</div>
+      <button id="newBtn" class="btnDark pressable">NUEVO ESCANEO</button>
 
-      <div id="topControls">
-        <button id="newBtn" class="btnDark">NUEVO ESCANEO</button>
+      <div id="cutsCam">
+        <button class="cutMini pressable" data-cut="10">10</button>
+        <button class="cutMini pressable" data-cut="20">20</button>
+        <button class="cutMini pressable" data-cut="50">50</button>
+      </div>
 
-        <div id="cutsCam">
-          <button class="cutMini" data-cut="10">10</button>
-          <button class="cutMini" data-cut="20">20</button>
-          <button class="cutMini" data-cut="50">50</button>
-        </div>
-
-        <div id="roiSizeRow" title="Tamaño de ventana (ROI)">
-          <button class="roiMini active" data-roi="S">ROI: Pequeño</button>
-          <button class="roiMini" data-roi="M">Mediano</button>
-          <button class="roiMini" data-roi="L">Grande</button>
-        </div>
+      <div id="roiSizeRow" title="Tamaño de ventana">
+        <button class="roiMini pressable active" data-roi="S">Pequeño</button>
+        <button class="roiMini pressable" data-roi="M">Mediano</button>
+        <button class="roiMini pressable" data-roi="L">Grande</button>
       </div>
     </div>
   </div>
 
   <div id="powerBottom">
-    <button id="powerBtn" class="btnRed">APAGAR CÁMARA</button>
+    <button id="powerBtn" class="btnRed pressable">APAGAR CÁMARA</button>
   </div>
 
+  <div id="toast">Elegir corte</div>
   <div id="status"></div>
 
   <div id="screenStart" class="screen">
     <div class="title">Elige el corte del billete</div>
     <div class="cuts" id="cutsStart">
-      <button class="cutBtn" data-cut="10">10</button>
-      <button class="cutBtn" data-cut="20">20</button>
-      <button class="cutBtn" data-cut="50">50</button>
+      <button class="cutBtn pressable" data-cut="10">10</button>
+      <button class="cutBtn pressable" data-cut="20">20</button>
+      <button class="cutBtn pressable" data-cut="50">50</button>
     </div>
-    <button id="startBtn" class="btnBig btnGreen" disabled>INICIAR CÁMARA</button>
+    <button id="startBtn" class="btnBig btnGreen pressable">INICIAR CÁMARA</button>
   </div>
 </div>
 
@@ -193,19 +245,19 @@
   const result = document.getElementById("result");
   const statusEl = document.getElementById("status");
   const topBar = document.getElementById("topBar");
-  const chip = document.getElementById("chip");
   const powerBottom = document.getElementById("powerBottom");
 
   const screenStart = document.getElementById("screenStart");
   const startBtn = document.getElementById("startBtn");
   const newBtn = document.getElementById("newBtn");
   const powerBtn = document.getElementById("powerBtn");
+  const toast = document.getElementById("toast");
 
   video.autoplay = true;
   video.muted = true;
   video.setAttribute("playsinline","");
 
-  let selectedCut = null;
+  let selectedCut = localStorage.getItem("selectedCut") || null;
   let rangesData = {};
   let worker = null;
   let stream = null;
@@ -228,23 +280,29 @@
   let dotsTimer = null;
   let dotsPhase = 0;
 
-  // ROI sizes (CSS vars by direct style)
   const ROI_PRESETS = {
     S: { top:"22%", right:"10%", width:"62%", height:"12%" },
     M: { top:"21%", right:"8%",  width:"70%", height:"14%" },
     L: { top:"20%", right:"5%",  width:"78%", height:"16%" }
   };
-  let roiPreset = "S";
+  let roiPreset = localStorage.getItem("roiPreset") || "S";
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=>toast.classList.remove("show"), 900);
+  }
 
   function applyRoiPreset(p){
     roiPreset = p;
+    localStorage.setItem("roiPreset", p);
     const s = ROI_PRESETS[p];
     roi.style.top = s.top;
     roi.style.right = s.right;
     roi.style.width = s.width;
     roi.style.height = s.height;
 
-    // mover también el label debajo del ROI
     serialLabel.style.top = `calc(${s.top} + ${s.height} + 14px)`;
     serialLabel.style.right = s.right;
     serialLabel.style.width = s.width;
@@ -270,9 +328,7 @@
       dotsPhase++;
     }, 350);
   }
-  function stopDots(){
-    if(dotsTimer){ clearInterval(dotsTimer); dotsTimer = null; }
-  }
+  function stopDots(){ if(dotsTimer){ clearInterval(dotsTimer); dotsTimer=null; } }
 
   function resetPending(){ pendingCandidate=null; pendingCount=0; }
   function feedCandidate(candidate){
@@ -284,7 +340,7 @@
   async function loadRanges(){
     try{
       rangesData = await fetch("ranges.json?v="+Date.now(), {cache:"no-store"}).then(r=>r.json());
-      statusEl.textContent = "Rangos cargados. Elige corte e inicia cámara.";
+      statusEl.textContent = "";
     }catch(e){
       statusEl.textContent = "❌ No pude cargar ranges.json.\n"+(e?.message||e);
     }
@@ -342,7 +398,7 @@
 
   function setCut(cut){
     selectedCut = cut;
-    startBtn.disabled = !selectedCut;
+    localStorage.setItem("selectedCut", cut);
 
     document.querySelectorAll("#cutsStart .cutBtn").forEach(b=>{
       b.classList.toggle("active", b.dataset.cut===selectedCut);
@@ -351,14 +407,14 @@
       b.classList.toggle("active", b.dataset.cut===selectedCut);
     });
 
-    chip.textContent = "Corte: " + selectedCut;
-
+    // si ya hay número fijado, recalcula símbolo
     if(running && displayedCandidate){
       const shownNum = Number(displayedCandidate.split(" ")[0]);
       displayedInList = inRangesForCut_B(selectedCut, shownNum);
       showDecision(displayedInList);
     }
   }
+
   document.querySelectorAll("[data-cut]").forEach(btn=>{
     btn.addEventListener("click", ()=> setCut(btn.dataset.cut));
   });
@@ -371,7 +427,6 @@
 
   async function initWorker(){
     if(worker) return worker;
-    statusEl.textContent="Cargando OCR…";
     worker = await Tesseract.createWorker("eng");
     await worker.setParameters({
       tessedit_char_whitelist:"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -380,13 +435,19 @@
     return worker;
   }
 
-  async function startCameraOnce(){
-    if(!selectedCut){ statusEl.textContent="Primero elige el corte."; return; }
+  async function startCamera(){
+    if(!selectedCut){
+      showToast("Elegir corte");
+      return;
+    }
+
     try{
       await initWorker();
+
       try{
         stream = await navigator.mediaDevices.getUserMedia({
-          video:{ facingMode:"environment", width:{ideal:1920}, height:{ideal:1080} }, audio:false
+          video:{ facingMode:"environment", width:{ideal:1920}, height:{ideal:1080} },
+          audio:false
         });
       }catch{
         stream = await navigator.mediaDevices.getUserMedia({video:true, audio:false});
@@ -397,6 +458,7 @@
       await video.play();
 
       running=true; busy=false;
+
       screenStart.classList.add("hidden");
       topBar.style.display="block";
       powerBottom.style.display="block";
@@ -417,6 +479,7 @@
       NEED_SAME=2;
       startDots();
       scanLoop();
+
     }catch(e){
       statusEl.textContent="❌ Error iniciando: "+(e?.message||e);
       stopAll();
@@ -439,11 +502,12 @@
     displayedCandidate=null; displayedInList=null;
     serialLabel.textContent="—"; serialLabel.className="";
     resetPending(); nonBCount=0;
-
-    statusEl.textContent="Elige corte e inicia cámara.";
   }
 
   function newScan(){
+    // feedback
+    navigator.vibrate?.(40);
+
     displayedCandidate=null; displayedInList=null;
     serialLabel.className="searching";
     serialLabel.textContent="Buscando…";
@@ -481,7 +545,7 @@
       w = Math.max(1, Math.min(w, video.videoWidth-x));
       h = Math.max(1, Math.min(h, video.videoHeight-y));
 
-      // NUEVO: recorte interno (quita bordes distractores)
+      // recorte interno (quita bordes distractores)
       const padX = Math.floor(w * 0.06);
       const padY = Math.floor(h * 0.18);
       x += padX; y += padY;
@@ -541,11 +605,44 @@
     }
   }
 
-  startBtn.addEventListener("click", startCameraOnce);
+  // Eventos
+  startBtn.addEventListener("click", startCamera);
   powerBtn.addEventListener("click", stopAll);
   newBtn.addEventListener("click", newScan);
 
-  statusEl.textContent="Elige corte e inicia cámara.";
+  // Estado inicial UI: marcar corte guardado si existe
+  if(selectedCut){
+    setCut(selectedCut);
+  }
+  applyRoiPreset(roiPreset);
+
+  // Auto-intento de iniciar cámara (si el browser lo permite)
+  // - si ya hay corte elegido
+  // - y si el usuario ya dio permisos antes
+  async function autoStartIfPossible(){
+    if(!selectedCut) return;
+    if(!navigator.mediaDevices?.getUserMedia) return;
+    try{
+      // En iOS a veces esto falla sin “gesture”. Igual intentamos.
+      await startCamera();
+    }catch(_){}
+  }
+
+  // intenta al cargar
+  window.addEventListener("load", ()=> {
+    // si quieres desactivar autoStart: comenta la línea de abajo
+    autoStartIfPossible();
+  });
+
+  // intenta al volver a la pestaña
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.visibilityState === "visible"){
+      // si estaba apagada, intentamos reactivar (best-effort)
+      if(!running){
+        autoStartIfPossible();
+      }
+    }
+  });
 </script>
 </body>
 </html>
