@@ -24,7 +24,7 @@
   /* Marco ROI */
   #roi{
     position:absolute;
-    top:10%;
+    top:18%;
     right:5%;
     width:78%;
     height:16%;
@@ -38,7 +38,7 @@
   /* Serial debajo del marco */
   #serial{
     position:absolute;
-    top:calc(10% + 16% + 14px);
+    top:calc(18% + 16% + 14px);
     right:5%;
     width:78%;
     text-align:center;
@@ -86,15 +86,17 @@
     border-radius:20px;
     font-weight:900;
     padding:16px 22px;
-    font-size:20px;
+    font-size:18px;
   }
+  .btnGreen{ background:var(--green); color:#000; }
+  .btnRed{ background:var(--red); color:#fff; }
+  .btnDark{ background:rgba(255,255,255,.10); color:#fff; }
+
   .btnBig{
     width:min(440px, 92vw);
     padding:18px 22px;
     font-size:22px;
   }
-  .btnGreen{ background:var(--green); color:#000; }
-  .btnRed{ background:var(--red); color:#fff; }
 
   /* Selector corte (pantalla inicio) */
   .cuts{
@@ -127,8 +129,13 @@
     display:none;
     gap:10px;
     align-items:center;
-    justify-content:flex-start;
+    justify-content:space-between;
     pointer-events:auto;
+  }
+  #leftGroup{
+    display:flex;
+    gap:10px;
+    align-items:center;
   }
   #chip{
     background: var(--panel);
@@ -136,6 +143,7 @@
     border-radius:16px;
     font-weight:900;
     font-size:14px;
+    white-space:nowrap;
   }
   #cutsCam{
     display:flex;
@@ -155,20 +163,16 @@
   }
   .cutMini.active{ border-color: var(--green); }
 
-  /* Barra inferior */
-  #bottomBar{
-    position:absolute;
-    left:0; right:0;
-    bottom:22px;
+  #rightGroup{
     display:flex;
-    justify-content:center;
-    pointer-events:auto;
+    gap:10px;
+    align-items:center;
   }
 
   #status{
     position:absolute;
     left:12px; right:12px;
-    bottom:6px;
+    bottom:8px;
     font-size:12px;
     opacity:.78;
     white-space:pre-wrap;
@@ -186,11 +190,18 @@
   <div id="result"></div>
 
   <div id="topBar">
-    <div id="chip">Corte: —</div>
-    <div id="cutsCam">
-      <button class="cutMini" data-cut="10">10</button>
-      <button class="cutMini" data-cut="20">20</button>
-      <button class="cutMini" data-cut="50">50</button>
+    <div id="leftGroup">
+      <div id="chip">Corte: —</div>
+      <div id="cutsCam">
+        <button class="cutMini" data-cut="10">10</button>
+        <button class="cutMini" data-cut="20">20</button>
+        <button class="cutMini" data-cut="50">50</button>
+      </div>
+    </div>
+
+    <div id="rightGroup">
+      <button id="newBtn" class="btnDark">NUEVO ESCANEO</button>
+      <button id="powerBtn" class="btnRed">APAGAR CÁMARA</button>
     </div>
   </div>
 
@@ -205,10 +216,6 @@
       <button class="cutBtn" data-cut="50">50</button>
     </div>
     <button id="startBtn" class="btnBig btnGreen" disabled>INICIAR CÁMARA</button>
-  </div>
-
-  <div id="bottomBar" class="hidden">
-    <button id="closeBtn" class="btnBig btnRed">CERRAR</button>
   </div>
 </div>
 
@@ -226,8 +233,8 @@
 
   const screenStart = document.getElementById("screenStart");
   const startBtn = document.getElementById("startBtn");
-  const closeBtn = document.getElementById("closeBtn");
-  const bottomBar = document.getElementById("bottomBar");
+  const newBtn = document.getElementById("newBtn");
+  const powerBtn = document.getElementById("powerBtn");
 
   video.autoplay = true;
   video.muted = true;
@@ -249,17 +256,14 @@
   let pendingCount = 0;
   const NEED_SAME = 3;
 
-  // Persistencia: NO desaparece
+  // Persistencia del resultado
   let displayedCandidate = null;
-  let lastSeenMs = 0;
-  const GRACE_MS = 2500; // si se pierde OCR, mantenemos lo último por 2.5s
 
   function resetPending(){
     pendingCandidate = null;
     pendingCount = 0;
   }
 
-  // Devuelve true cuando candidate se repite NEED_SAME veces seguidas
   function feedCandidate(candidate){
     if(candidate === pendingCandidate) pendingCount++;
     else { pendingCandidate = candidate; pendingCount = 1; }
@@ -294,10 +298,9 @@
       .replace(/\s+/g, " ")
       .trim();
 
-    // 9 dígitos + B (espacio opcional)
     const m = t.match(/(?:^|\s)(\d{9})\s*B(?:\s|$)/);
     if(!m) return null;
-    return { num: m[1], letter: "B", cleaned: t };
+    return { num: m[1], letter: "B" };
   }
 
   // ---------- Canvas + preprocesado ----------
@@ -323,29 +326,21 @@
     selectedCut = cut;
     startBtn.disabled = !selectedCut;
 
-    // botones pantalla inicio
     document.querySelectorAll("#cutsStart .cutBtn").forEach(b=>{
       b.classList.toggle("active", b.dataset.cut === selectedCut);
     });
-    // botones cámara
     document.querySelectorAll("#cutsCam .cutMini").forEach(b=>{
       b.classList.toggle("active", b.dataset.cut === selectedCut);
     });
 
     chip.textContent = "Corte: " + selectedCut;
 
-    // si estamos escaneando, no reiniciamos cámara, solo reiniciamos la confirmación
-    if(running){
-      resetPending();
-      // no borres el número mostrado; solo recalcula el símbolo si ya hay displayedCandidate
-      if(displayedCandidate){
-        const shownNum = Number(displayedCandidate.split(" ")[0]);
-        const inList = inRangesForCut_B(selectedCut, shownNum);
-        showDecision(inList);
-        statusEl.textContent = `Corte cambiado a ${selectedCut}. Manteniendo ${displayedCandidate}.`;
-      }else{
-        statusEl.textContent = `Corte cambiado a ${selectedCut}.`;
-      }
+    // si ya hay un resultado mostrado, recalcular símbolo con el nuevo corte
+    if(running && displayedCandidate){
+      const shownNum = Number(displayedCandidate.split(" ")[0]);
+      const inList = inRangesForCut_B(selectedCut, shownNum);
+      showDecision(inList);
+      statusEl.textContent = `Corte ${selectedCut} · ${displayedCandidate} (recalculado)`;
     }
   }
 
@@ -376,7 +371,7 @@
     return worker;
   }
 
-  // ---------- Iniciar cámara una sola vez ----------
+  // ---------- Iniciar cámara ----------
   async function startCameraOnce(){
     if(!selectedCut){
       statusEl.textContent = "Primero elige el corte.";
@@ -405,51 +400,54 @@
 
       // UI a modo cámara
       screenStart.classList.add("hidden");
-      bottomBar.classList.remove("hidden");
       topBar.style.display = "flex";
-
       video.style.display = "block";
       roi.style.display = "block";
       serialLabel.style.display = "block";
 
-      // reset
       displayedCandidate = null;
-      lastSeenMs = 0;
+      serialLabel.textContent = "—";
+      result.style.display = "none";
       resetPending();
 
       chip.textContent = "Corte: " + selectedCut;
-      statusEl.textContent = "✅ Cámara activa. Cambia 10/20/50 arriba sin reiniciar.";
+      statusEl.textContent = "✅ Cámara activa. Usa 'NUEVO ESCANEO' para escanear otro billete.";
       scanLoop();
     }catch(e){
       statusEl.textContent =
         "❌ Error iniciando.\n" +
-        (e?.name || "Error") + ": " + (e?.message || e) +
-        "\n\nSolución típica iPhone: Ajustes > Safari > Cámara = Permitir, recargar.";
+        (e?.name || "Error") + ": " + (e?.message || e);
       stopAll();
     }
   }
 
-  // ---------- Cerrar ----------
+  // ---------- Apagar cámara ----------
   function stopAll(){
     running = false;
     try{ stream?.getTracks?.().forEach(t=>t.stop()); }catch(_){}
     stream = null;
     video.srcObject = null;
 
-    // UI back
     video.style.display = "none";
     roi.style.display = "none";
     serialLabel.style.display = "none";
     result.style.display = "none";
     topBar.style.display = "none";
-    bottomBar.classList.add("hidden");
     screenStart.classList.remove("hidden");
 
-    // reset
     displayedCandidate = null;
     serialLabel.textContent = "—";
     resetPending();
     statusEl.textContent = "Elige corte e inicia cámara.";
+  }
+
+  // ---------- Nuevo escaneo (reinicia solo el resultado, NO la cámara) ----------
+  function newScan(){
+    displayedCandidate = null;
+    serialLabel.textContent = "—";
+    result.style.display = "none";
+    resetPending();
+    statusEl.textContent = "Nuevo escaneo… apunta al serial dentro del marco.";
   }
 
   // ---------- Loop OCR ----------
@@ -489,48 +487,37 @@
 
       const { data } = await worker.recognize(cropCanvas);
       const serial = extract(data?.text || "");
-      const now = Date.now();
 
-      // Si no detecta, NO borres lo mostrado
+      // Si no detecta, NO borra nada (mantiene número y símbolo)
       if(!serial){
-        if(displayedCandidate && (now - lastSeenMs) > GRACE_MS){
-          // opcional: ocultar símbolo si se pierde mucho tiempo
-          result.style.display = "none";
-          statusEl.textContent = `Sin lectura… (manteniendo ${displayedCandidate})`;
-        }
         return;
       }
-
-      // Vimos algo válido (B + 9 dígitos)
-      lastSeenMs = now;
 
       const candidate = `${serial.num} B`;
 
-      // Confirmación por 3 lecturas iguales seguidas
       const confirmed = feedCandidate(candidate);
-
       if(!confirmed){
-        // NO cambiar lo mostrado todavía
-        statusEl.textContent = `Leyendo… ${candidate} (${pendingCount}/${NEED_SAME})`;
+        // no cambiamos lo mostrado
         return;
       }
 
-      // Confirmado: ahora sí actualizamos lo mostrado fijo
+      // Confirmado: fijamos el número y símbolo
       displayedCandidate = candidate;
       serialLabel.textContent = displayedCandidate;
 
       const inList = inRangesForCut_B(selectedCut, Number(serial.num));
       showDecision(inList);
 
+      // Mantener símbolo mientras se mantenga el número
       statusEl.textContent =
         `Corte ${selectedCut} · ${displayedCandidate} → ${inList ? "EN LISTA (X)" : "NO EN LISTA (✓)"}`;
 
-      // opcional vibración cuando está EN LISTA
+      // Opcional vibración cuando está EN LISTA
       if(inList){
         navigator.vibrate?.(120);
       }
 
-      // Resetea para exigir 3 iguales para el próximo cambio
+      // Exigir 3 iguales para el próximo cambio
       resetPending();
 
     } finally {
@@ -540,9 +527,9 @@
 
   // Botones
   startBtn.addEventListener("click", startCameraOnce);
-  closeBtn.addEventListener("click", stopAll);
+  powerBtn.addEventListener("click", stopAll);
+  newBtn.addEventListener("click", newScan);
 
-  // Init
   statusEl.textContent = "Elige corte e inicia cámara.";
 </script>
 </body>
