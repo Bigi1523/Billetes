@@ -3,300 +3,538 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>Serial Scanner</title>
+<title>Billetes - Serial Scanner</title>
 
 <style>
-body{
-  margin:0;
-  background:#000;
-  color:#fff;
-  font-family:system-ui;
-  overflow:hidden;
-}
+  :root{
+    --green:#19ff5a;
+    --red:#ff3b30;
+    --panel: rgba(0,0,0,.62);
+    --panel2: rgba(255,255,255,.10);
+  }
+  body{ margin:0; background:#000; color:#fff; font-family:system-ui; overflow:hidden; }
+  #wrap{ position:relative; width:100vw; height:100vh; }
 
-#wrap{
-  position:relative;
-  width:100vw;
-  height:100vh;
-}
+  video{
+    width:100%; height:100%;
+    object-fit:cover;
+    background:#000;
+    display:none;
+  }
 
-video{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  background:#000;
-  display:none;
-}
+  /* ROI */
+  #roi{
+    position:absolute;
+    top:10%;
+    right:5%;
+    width:78%;
+    height:16%;
+    border:4px solid var(--green);
+    border-radius:18px;
+    box-shadow:0 0 0 9999px rgba(0,0,0,.32);
+    pointer-events:none;
+    display:none;
+  }
 
-/* Marco */
-#roi{
-  position:absolute;
-  top:8%;
-  right:5%;
-  width:72%;
-  height:14%;
-  border:4px solid #19ff5a;
-  border-radius:18px;
-  box-shadow:0 0 0 9999px rgba(0,0,0,.35);
-  pointer-events:none;
-  display:none;
-}
+  /* Serial debajo del marco */
+  #serial{
+    position:absolute;
+    top:calc(10% + 16% + 14px);
+    right:5%;
+    width:78%;
+    text-align:center;
+    font-size:22px;
+    font-weight:900;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    display:none;
+    text-shadow: 0 2px 10px rgba(0,0,0,.7);
+  }
 
-/* Número detectado */
-#serial{
-  position:absolute;
-  top:calc(8% + 14% + 15px);
-  right:5%;
-  width:72%;
-  text-align:center;
-  font-size:22px;
-  font-weight:900;
-  font-family:monospace;
-  display:none;
-}
+  /* Resultado central */
+  #result{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    font-size:160px;
+    font-weight:900;
+    display:none;
+    text-shadow: 0 8px 18px rgba(0,0,0,.6);
+    user-select:none;
+    pointer-events:none;
+    opacity:.92;
+  }
+  .ok{ color:var(--green); }
+  .bad{ color:var(--red); }
 
-/* Resultado central */
-#result{
-  position:absolute;
-  top:50%;
-  left:50%;
-  transform:translate(-50%,-50%);
-  font-size:150px;
-  font-weight:900;
-  display:none;
-}
+  /* Pantallas */
+  .screen{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:18px;
+    padding:22px;
+    background:#000;
+  }
+  .hidden{ display:none !important; }
 
-.ok{ color:#19ff5a; }
-.bad{ color:#ff3b30; }
+  .title{
+    font-size:22px;
+    font-weight:900;
+    text-align:center;
+    opacity:.95;
+  }
 
-/* Botones */
-#controls{
-  position:absolute;
-  bottom:40px;
-  width:100%;
-  text-align:center;
-}
+  button{
+    border:none;
+    border-radius:20px;
+    font-weight:900;
+    padding:16px 22px;
+    font-size:20px;
+  }
 
-button{
-  font-size:22px;
-  padding:18px 28px;
-  border-radius:20px;
-  border:none;
-  font-weight:900;
-  margin:10px;
-}
+  .btnBig{
+    width:min(440px, 92vw);
+    padding:18px 22px;
+    font-size:22px;
+  }
 
-#startBtn{
-  background:#19ff5a;
-  color:#000;
-}
+  .btnGreen{ background:var(--green); color:#000; }
+  .btnRed{ background:var(--red); color:#fff; }
+  .btnGhost{ background:rgba(255,255,255,.10); color:#fff; }
 
-#stopBtn{
-  background:#ff3b30;
-  color:#fff;
-  display:none;
-}
+  /* Selector corte */
+  .cuts{
+    display:flex;
+    gap:12px;
+    width:min(440px, 92vw);
+    justify-content:center;
+  }
+  .cutBtn{
+    flex:1;
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    border:2px solid rgba(255,255,255,.14);
+    padding:14px 0;
+    border-radius:18px;
+    font-size:20px;
+    font-weight:900;
+  }
+  .cutBtn.active{
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(25,255,90,.18) inset;
+  }
 
-#status{
-  position:absolute;
-  bottom:10px;
-  left:10px;
-  right:10px;
-  font-size:13px;
-  opacity:.7;
-  white-space:pre-wrap;
-}
+  /* Barra inferior */
+  #bottomBar{
+    position:absolute;
+    left:0; right:0;
+    bottom:22px;
+    display:flex;
+    justify-content:center;
+    pointer-events:auto;
+  }
+
+  #status{
+    position:absolute;
+    left:12px; right:12px;
+    bottom:6px;
+    font-size:12px;
+    opacity:.75;
+    white-space:pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  /* Top bar en modo cámara */
+  #topBar{
+    position:absolute;
+    left:12px;
+    right:12px;
+    top:12px;
+    display:none;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+    pointer-events:auto;
+  }
+  #topLeft{
+    display:flex;
+    gap:10px;
+    align-items:center;
+  }
+  #chip{
+    background: var(--panel);
+    padding:10px 12px;
+    border-radius:16px;
+    font-weight:900;
+    font-size:14px;
+  }
+  #cutsCam{
+    display:flex;
+    gap:8px;
+    background: var(--panel);
+    padding:8px;
+    border-radius:18px;
+  }
+  .cutMini{
+    background: rgba(255,255,255,.10);
+    border:2px solid rgba(255,255,255,.10);
+    color:#fff;
+    border-radius:14px;
+    padding:8px 12px;
+    font-size:16px;
+    font-weight:900;
+  }
+  .cutMini.active{
+    border-color: var(--green);
+  }
 </style>
 </head>
 
 <body>
 <div id="wrap">
-
   <video id="video" playsinline muted></video>
+
   <div id="roi"></div>
   <div id="serial">—</div>
   <div id="result"></div>
 
-  <div id="controls">
-    <button id="startBtn">INICIAR CÁMARA</button>
-    <button id="stopBtn">CERRAR</button>
+  <div id="topBar">
+    <div id="topLeft">
+      <div id="chip">Corte: —</div>
+      <div id="cutsCam">
+        <button class="cutMini" data-cut="10">10</button>
+        <button class="cutMini" data-cut="20">20</button>
+        <button class="cutMini" data-cut="50">50</button>
+      </div>
+    </div>
   </div>
 
   <div id="status"></div>
 
+  <!-- Screen: elegir corte + iniciar -->
+  <div id="screenStart" class="screen">
+    <div class="title">Elige el corte del billete</div>
+    <div class="cuts" id="cutsStart">
+      <button class="cutBtn" data-cut="10">10</button>
+      <button class="cutBtn" data-cut="20">20</button>
+      <button class="cutBtn" data-cut="50">50</button>
+    </div>
+    <button id="startBtn" class="btnBig btnGreen" disabled>INICIAR CÁMARA</button>
+  </div>
+
+  <!-- Bottom bar en modo cámara -->
+  <div id="bottomBar" class="hidden">
+    <button id="closeBtn" class="btnBig btnRed">CERRAR</button>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
-const video = document.getElementById("video");
-const startBtn = document.getElementById("startBtn");
-const stopBtn = document.getElementById("stopBtn");
-const roi = document.getElementById("roi");
-const serialLabel = document.getElementById("serial");
-const result = document.getElementById("result");
-const statusEl = document.getElementById("status");
+  // -------- UI refs ----------
+  const video = document.getElementById("video");
+  const roi = document.getElementById("roi");
+  const serialLabel = document.getElementById("serial");
+  const result = document.getElementById("result");
+  const statusEl = document.getElementById("status");
+  const topBar = document.getElementById("topBar");
+  const chip = document.getElementById("chip");
 
-video.autoplay = true;
-video.muted = true;
-video.setAttribute("playsinline","");
+  const screenStart = document.getElementById("screenStart");
+  const startBtn = document.getElementById("startBtn");
+  const closeBtn = document.getElementById("closeBtn");
+  const bottomBar = document.getElementById("bottomBar");
 
-let worker;
-let stream;
-let running=false;
-let busy=false;
-let freezeUntil=0;
-let rangesData={};
+  video.autoplay = true;
+  video.muted = true;
+  video.setAttribute("playsinline","");
 
-fetch("ranges.json?v="+Date.now())
-  .then(r=>r.json())
-  .then(d=>{
-    rangesData=d;
-    for(const k in rangesData){
-      rangesData[k].sort((a,b)=>a.start-b.start);
+  // -------- State ----------
+  let selectedCut = null; // "10" | "20" | "50"
+  let rangesData = {};
+  let worker = null;
+  let stream = null;
+  let running = false;
+  let busy = false;
+  let freezeUntil = 0;
+
+  // Estabilización OCR
+  let lastCandidate = null;
+  let sameCount = 0;
+  const recent = [];
+  const RECENT_MAX = 5;
+  const NEED_CONSECUTIVE = 2;
+  const NEED_IN_WINDOW = 3;
+
+  const OCR_INTERVAL = 500;
+
+  // -------- Load ranges ----------
+  async function loadRanges(){
+    try{
+      rangesData = await fetch("ranges.json?v=" + Date.now(), { cache:"no-store" }).then(r=>r.json());
+      statusEl.textContent = "Rangos cargados.";
+    }catch(e){
+      statusEl.textContent = "❌ No pude cargar ranges.json.\n" + (e?.message || e);
     }
-  });
+  }
+  loadRanges();
 
-function inRanges(letter, num){
-  const list = rangesData[letter];
+  // -------- Range check (no ordenado) ----------
+function inRangesForCut(cut, num){
+  const list = rangesData[cut]?.["B"];
   if(!list) return false;
-
   for(const r of list){
     if(num >= r.start && num <= r.end) return true;
   }
   return false;
 }
+  // -------- Extractor: SOLO 9 dígitos + B ----------
+  function extract(text){
+    const t = (text || "").toUpperCase()
+      .replace(/[^\dA-Z]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
 
-function extract(text){
-  const t=text.toUpperCase()
-    .replace(/[^\dA-Z ]/g," ")
-    .replace(/\s+/g," ")
-    .trim();
-  const m=t.match(/(\d{9})\s*([A-Z])/);
-  if(!m) return null;
-  return {num:m[1],letter:m[2]};
-}
+    const m = t.match(/(?:^|\s)(\d{9})\s*B(?:\s|$)/);
+    if(!m) return null;
+    return { num: m[1], letter: "B", cleaned: t };
+  }
 
-async function startCamera(){
-  try{
-    worker=await Tesseract.createWorker("eng");
+  // -------- Canvas + preprocess ----------
+  const frameCanvas = document.createElement("canvas");
+  const frameCtx = frameCanvas.getContext("2d",{ willReadFrequently:true });
+  const cropCanvas = document.createElement("canvas");
+  const cropCtx = cropCanvas.getContext("2d",{ willReadFrequently:true });
+
+  function preprocess(img){
+    const d = img.data;
+    for(let i=0; i<d.length; i+=4){
+      let y = d[i]*.299 + d[i+1]*.587 + d[i+2]*.114;
+      y = (y - 128) * 1.45 + 128;
+      const v = y > 135 ? 255 : 0;
+      d[i]=d[i+1]=d[i+2]=v;
+      d[i+3]=255;
+    }
+    return img;
+  }
+
+  // -------- Stabilization helpers ----------
+  function pushRecent(s){
+    recent.push(s);
+    if(recent.length > RECENT_MAX) recent.shift();
+  }
+  function countInRecent(s){
+    let c=0;
+    for(const x of recent) if(x===s) c++;
+    return c;
+  }
+  function isStable(){
+    return sameCount >= NEED_CONSECUTIVE || (lastCandidate && countInRecent(lastCandidate) >= NEED_IN_WINDOW);
+  }
+  function resetStabilization(){
+    lastCandidate = null;
+    sameCount = 0;
+    recent.length = 0;
+  }
+
+  // -------- Cut selection (start screen + camera screen) ----------
+  function setCut(cut){
+    selectedCut = cut;
+    startBtn.disabled = !selectedCut;
+
+    // botones de pantalla inicial
+    document.querySelectorAll("#cutsStart .cutBtn").forEach(b=>{
+      b.classList.toggle("active", b.dataset.cut === selectedCut);
+    });
+
+    // botones mini en cámara
+    document.querySelectorAll("#cutsCam .cutMini").forEach(b=>{
+      b.classList.toggle("active", b.dataset.cut === selectedCut);
+    });
+
+    chip.textContent = "Corte: " + selectedCut;
+
+    // al cambiar de corte en modo cámara, ocultamos el símbolo hasta que haya lectura estable del nuevo corte
+    if(running){
+      result.style.display = "none";
+      resetStabilization();
+      statusEl.textContent = `Corte cambiado a ${selectedCut}.`;
+    }
+  }
+
+  document.querySelectorAll("[data-cut]").forEach(btn=>{
+    btn.addEventListener("click", ()=> setCut(btn.dataset.cut));
+  });
+
+  // -------- Worker ----------
+  async function initWorker(){
+    if(worker) return worker;
+    statusEl.textContent = "Cargando OCR…";
+    worker = await Tesseract.createWorker("eng");
     await worker.setParameters({
-      tessedit_char_whitelist:"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     });
-
-    stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:"environment"},
-      audio:false
-    });
-
-    video.srcObject=stream;
-    await video.play();
-
-    video.style.display="block";
-    roi.style.display="block";
-    serialLabel.style.display="block";
-    stopBtn.style.display="inline-block";
-    startBtn.style.display="none";
-
-    running=true;
-    scanLoop();
-  }
-  catch(e){
-    statusEl.textContent="Error cámara: "+e.message;
-  }
-}
-
-function stopCamera(){
-  running=false;
-  if(stream){
-    stream.getTracks().forEach(t=>t.stop());
-  }
-  video.style.display="none";
-  roi.style.display="none";
-  serialLabel.style.display="none";
-  result.style.display="none";
-  stopBtn.style.display="none";
-  startBtn.style.display="inline-block";
-}
-
-const frameCanvas=document.createElement("canvas");
-const frameCtx=frameCanvas.getContext("2d",{willReadFrequently:true});
-const cropCanvas=document.createElement("canvas");
-const cropCtx=cropCanvas.getContext("2d",{willReadFrequently:true});
-
-function preprocess(img){
-  const d=img.data;
-  for(let i=0;i<d.length;i+=4){
-    let y=(d[i]*.299+d[i+1]*.587+d[i+2]*.114);
-    y=(y-128)*1.4+128;
-    const v=y>135?255:0;
-    d[i]=d[i+1]=d[i+2]=v;
-  }
-  return img;
-}
-
-async function scanLoop(){
-  if(!running) return;
-  setTimeout(scanLoop,600);
-
-  if(busy || Date.now()<freezeUntil) return;
-  if(!video.videoWidth) return;
-
-  busy=true;
-
-  frameCanvas.width=video.videoWidth;
-  frameCanvas.height=video.videoHeight;
-  frameCtx.drawImage(video,0,0);
-
-  const vb=video.getBoundingClientRect();
-  const rb=roi.getBoundingClientRect();
-  const sx=video.videoWidth/vb.width;
-  const sy=video.videoHeight/vb.height;
-
-  const x=(rb.left-vb.left)*sx;
-  const y=(rb.top-vb.top)*sy;
-  const w=rb.width*sx;
-  const h=rb.height*sy;
-
-  const crop=frameCtx.getImageData(x,y,w,h);
-  cropCanvas.width=w;
-  cropCanvas.height=h;
-  cropCtx.putImageData(preprocess(crop),0,0);
-
-  const {data}=await worker.recognize(cropCanvas);
-  const serial=extract(data.text||"");
-
-  if(!serial){
-    result.style.display="none";
-    serialLabel.textContent="—";
-    busy=false;
-    return;
+    return worker;
   }
 
-  serialLabel.textContent=`${serial.num} ${serial.letter}`;
+  // -------- Start camera once ----------
+  async function startCameraOnce(){
+    if(!selectedCut){
+      statusEl.textContent = "Primero elige el corte.";
+      return;
+    }
 
-  if(serial.letter!=="B"){
-    result.style.display="none";
-    busy=false;
-    return;
+    try{
+      await initWorker();
+      statusEl.textContent = "Solicitando cámara…";
+
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode:"environment", width:{ideal:1280}, height:{ideal:720} },
+          audio:false
+        });
+      }catch(e1){
+        stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+      }
+
+      video.srcObject = stream;
+      await new Promise(res => video.onloadedmetadata = res);
+      await video.play();
+
+      running = true;
+      busy = false;
+      freezeUntil = 0;
+      resetStabilization();
+
+      // UI switch: show camera
+      screenStart.classList.add("hidden");
+      bottomBar.classList.remove("hidden");
+      topBar.style.display = "flex";
+
+      video.style.display = "block";
+      roi.style.display = "block";
+      serialLabel.style.display = "block";
+
+      chip.textContent = "Corte: " + selectedCut;
+
+      statusEl.textContent = "✅ Cámara activa. Puedes cambiar 10/20/50 arriba sin reiniciar.";
+      scanLoop();
+    }catch(e){
+      statusEl.textContent =
+        "❌ Error iniciando.\n" +
+        (e?.name || "Error") + ": " + (e?.message || e) +
+        "\n\nSolución típica iPhone: Ajustes > Safari > Cámara = Permitir, recargar.";
+      stopAll();
+    }
   }
 
-  const ok=inRanges("B",Number(serial.num));
+  function stopAll(){
+    running = false;
+    try{ stream?.getTracks?.().forEach(t=>t.stop()); }catch(_){}
+    stream = null;
+    video.srcObject = null;
 
-  result.style.display="block";
-  result.className= ok ? "ok" : "bad";
-  result.textContent= ok ? "✓" : "✕";
+    // UI back to start
+    video.style.display = "none";
+    roi.style.display = "none";
+    serialLabel.style.display = "none";
+    result.style.display = "none";
+    topBar.style.display = "none";
+    bottomBar.classList.add("hidden");
+    screenStart.classList.remove("hidden");
 
-  if(ok){
-    navigator.vibrate?.(200);
-    freezeUntil=Date.now()+1500;
+    serialLabel.textContent = "—";
+    resetStabilization();
+    freezeUntil = 0;
+    statusEl.textContent = "Listo. Elige corte e inicia cámara.";
   }
 
-  busy=false;
-}
+  // -------- OCR loop ----------
+  async function scanLoop(){
+    if(!running) return;
+    setTimeout(scanLoop, OCR_INTERVAL);
 
-startBtn.onclick=startCamera;
-stopBtn.onclick=stopCamera;
+    if(busy) return;
+    if(Date.now() < freezeUntil) return;
+    if(!video.videoWidth || !video.videoHeight) return;
+    if(!selectedCut) return;
+
+    busy = true;
+
+    try{
+      frameCanvas.width = video.videoWidth;
+      frameCanvas.height = video.videoHeight;
+      frameCtx.drawImage(video, 0, 0);
+
+      const vb = video.getBoundingClientRect();
+      const rb = roi.getBoundingClientRect();
+      const sx = video.videoWidth / vb.width;
+      const sy = video.videoHeight / vb.height;
+
+      let x = Math.floor((rb.left - vb.left) * sx);
+      let y = Math.floor((rb.top - vb.top) * sy);
+      let w = Math.floor(rb.width * sx);
+      let h = Math.floor(rb.height * sy);
+
+      x = Math.max(0, Math.min(x, video.videoWidth - 1));
+      y = Math.max(0, Math.min(y, video.videoHeight - 1));
+      w = Math.max(1, Math.min(w, video.videoWidth - x));
+      h = Math.max(1, Math.min(h, video.videoHeight - y));
+
+      const crop = frameCtx.getImageData(x, y, w, h);
+      cropCanvas.width = w;
+      cropCanvas.height = h;
+      cropCtx.putImageData(preprocess(crop), 0, 0);
+
+      const { data } = await worker.recognize(cropCanvas);
+      const serial = extract(data?.text || "");
+
+      if(!serial){
+        serialLabel.textContent = "—";
+        result.style.display = "none";
+        resetStabilization();
+        return;
+      }
+
+      const candidate = `${serial.num} B`;
+      serialLabel.textContent = candidate;
+
+      pushRecent(candidate);
+      if(candidate === lastCandidate) sameCount++;
+      else { lastCandidate = candidate; sameCount = 1; }
+
+      if(!isStable()){
+        result.style.display = "none";
+        return;
+      }
+
+      const ok = inRangesForCut(selectedCut, Number(serial.num));
+
+      result.style.display = "block";
+      result.className = ok ? "ok" : "bad";
+      result.textContent = ok ? "✓" : "✕";
+
+      statusEl.textContent = `Corte ${selectedCut} · ${candidate} → ${ok ? "EN RANGO" : "fuera de rango"}`;
+
+      if(ok){
+        navigator.vibrate?.(200);
+        freezeUntil = Date.now() + 1200;
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
+  // Buttons
+  startBtn.addEventListener("click", startCameraOnce);
+  closeBtn.addEventListener("click", stopAll);
+
+  // Initial
+  statusEl.textContent = "Elige corte e inicia cámara.";
 </script>
 </body>
 </html>
