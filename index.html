@@ -24,7 +24,7 @@
   /* Marco ROI */
   #roi{
     position:absolute;
-    top:18%;
+    top:20%;
     right:5%;
     width:78%;
     height:16%;
@@ -35,10 +35,10 @@
     display:none;
   }
 
-  /* Serial debajo del marco */
+  /* Texto debajo del marco (serial o mensajes) */
   #serial{
     position:absolute;
-    top:calc(18% + 16% + 14px);
+    top:calc(20% + 16% + 14px);
     right:5%;
     width:78%;
     text-align:center;
@@ -48,11 +48,17 @@
     display:none;
     text-shadow: 0 2px 10px rgba(0,0,0,.7);
   }
+  #serial.warn{
+    color: #ffd60a;
+    font-family: system-ui;
+    font-size:18px;
+    letter-spacing:.2px;
+  }
 
   /* Resultado central */
   #result{
     position:absolute;
-    top:50%;
+    top:55%;
     left:50%;
     transform:translate(-50%,-50%);
     font-size:160px;
@@ -85,7 +91,7 @@
     border:none;
     border-radius:20px;
     font-weight:900;
-    padding:16px 22px;
+    padding:14px 18px;
     font-size:18px;
   }
   .btnGreen{ background:var(--green); color:#000; }
@@ -127,33 +133,44 @@
     right:12px;
     top:12px;
     display:none;
-    gap:10px;
-    align-items:center;
-    justify-content:space-between;
     pointer-events:auto;
   }
-  #leftGroup{
-    display:flex;
-    gap:10px;
-    align-items:center;
-  }
-  #chip{
+
+  #topPanel{
     background: var(--panel);
+    border-radius:22px;
+    padding:10px;
+    display:flex;
+    gap:12px;
+    align-items:flex-start;
+  }
+
+  #chip{
     padding:10px 12px;
     border-radius:16px;
     font-weight:900;
     font-size:14px;
     white-space:nowrap;
+    background: rgba(255,255,255,.10);
   }
+
+  #topControls{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    flex:1;
+  }
+
   #cutsCam{
     display:flex;
     gap:8px;
-    background: var(--panel);
+    background: rgba(255,255,255,.08);
     padding:8px;
     border-radius:18px;
+    width:max-content;
   }
   .cutMini{
-    background: rgba(255,255,255,.10);
+    background: rgba(0,0,0,.20);
     border:2px solid rgba(255,255,255,.10);
     color:#fff;
     border-radius:14px;
@@ -162,12 +179,6 @@
     font-weight:900;
   }
   .cutMini.active{ border-color: var(--green); }
-
-  #rightGroup{
-    display:flex;
-    gap:10px;
-    align-items:center;
-  }
 
   #status{
     position:absolute;
@@ -190,18 +201,20 @@
   <div id="result"></div>
 
   <div id="topBar">
-    <div id="leftGroup">
+    <div id="topPanel">
       <div id="chip">Corte: —</div>
-      <div id="cutsCam">
-        <button class="cutMini" data-cut="10">10</button>
-        <button class="cutMini" data-cut="20">20</button>
-        <button class="cutMini" data-cut="50">50</button>
-      </div>
-    </div>
 
-    <div id="rightGroup">
-      <button id="newBtn" class="btnDark">NUEVO ESCANEO</button>
-      <button id="powerBtn" class="btnRed">APAGAR CÁMARA</button>
+      <div id="topControls">
+        <button id="newBtn" class="btnDark">NUEVO ESCANEO</button>
+
+        <div id="cutsCam">
+          <button class="cutMini" data-cut="10">10</button>
+          <button class="cutMini" data-cut="20">20</button>
+          <button class="cutMini" data-cut="50">50</button>
+        </div>
+
+        <button id="powerBtn" class="btnRed">APAGAR CÁMARA</button>
+      </div>
     </div>
   </div>
 
@@ -248,22 +261,28 @@
   let running = false;
   let busy = false;
 
-  // OCR timing
-  const OCR_INTERVAL = 450;
+  // OCR timing (más rápido)
+  const OCR_INTERVAL = 320;
 
-  // Confirmación: 3 lecturas seguidas iguales
+  // Confirmación: primero rápido, luego estable
+  let NEED_SAME = 2;             // primer resultado más rápido
+  const NEED_SAME_AFTER_FIRST = 3;
+
   let pendingCandidate = null;
   let pendingCount = 0;
-  const NEED_SAME = 3;
 
   // Persistencia del resultado
   let displayedCandidate = null;
+  let displayedInList = null; // para mantener ✓/X junto al número
+
+  // Serie no reconocida (cuando hay letra distinta de B)
+  let nonBCount = 0;
+  const NONB_NEED = 2;
 
   function resetPending(){
     pendingCandidate = null;
     pendingCount = 0;
   }
-
   function feedCandidate(candidate){
     if(candidate === pendingCandidate) pendingCount++;
     else { pendingCandidate = candidate; pendingCount = 1; }
@@ -291,16 +310,19 @@
     return false;
   }
 
-  // ---------- Extractor: 9 dígitos + B ----------
-  function extract(text){
+  // ---------- Extractor ----------
+  // - Si encuentra 9 dígitos + letra (A-Z): devuelve {status:"found", num, letter}
+  // - Si no: {status:"none"}
+  function parseSerial(text){
     const t = (text || "").toUpperCase()
       .replace(/[^\dA-Z]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
 
-    const m = t.match(/(?:^|\s)(\d{9})\s*B(?:\s|$)/);
-    if(!m) return null;
-    return { num: m[1], letter: "B" };
+    // 9 dígitos + letra
+    const m = t.match(/(?:^|\s)(\d{9})\s*([A-Z])(?:\s|$)/);
+    if(!m) return { status:"none" };
+    return { status:"found", num:m[1], letter:m[2] };
   }
 
   // ---------- Canvas + preprocesado ----------
@@ -335,11 +357,11 @@
 
     chip.textContent = "Corte: " + selectedCut;
 
-    // si ya hay un resultado mostrado, recalcular símbolo con el nuevo corte
+    // si ya hay un número fijado, recalcula el símbolo con el nuevo corte
     if(running && displayedCandidate){
       const shownNum = Number(displayedCandidate.split(" ")[0]);
-      const inList = inRangesForCut_B(selectedCut, shownNum);
-      showDecision(inList);
+      displayedInList = inRangesForCut_B(selectedCut, shownNum);
+      showDecision(displayedInList);
       statusEl.textContent = `Corte ${selectedCut} · ${displayedCandidate} (recalculado)`;
     }
   }
@@ -348,7 +370,7 @@
     btn.addEventListener("click", ()=> setCut(btn.dataset.cut));
   });
 
-  // ---------- Mostrar símbolo (IN LISTA = X roja; NO EN LISTA = ✓ verde) ----------
+  // ---------- Símbolo (EN LISTA = X roja; NO EN LISTA = ✓ verde) ----------
   function showDecision(isInList){
     result.style.display = "block";
     if(isInList){
@@ -366,7 +388,9 @@
     statusEl.textContent = "Cargando OCR…";
     worker = await Tesseract.createWorker("eng");
     await worker.setParameters({
-      tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+      // Modo “una línea” suele ayudar para seriales
+      tessedit_pageseg_mode: "7"
     });
     return worker;
   }
@@ -398,25 +422,29 @@
       running = true;
       busy = false;
 
-      // UI a modo cámara
       screenStart.classList.add("hidden");
-      topBar.style.display = "flex";
+      topBar.style.display = "block";
       video.style.display = "block";
       roi.style.display = "block";
       serialLabel.style.display = "block";
 
+      // reset
       displayedCandidate = null;
-      serialLabel.textContent = "—";
+      displayedInList = null;
+      serialLabel.classList.remove("warn");
+      serialLabel.textContent = "Buscando…";
       result.style.display = "none";
       resetPending();
+      nonBCount = 0;
+
+      // primer resultado rápido
+      NEED_SAME = 2;
 
       chip.textContent = "Corte: " + selectedCut;
-      statusEl.textContent = "✅ Cámara activa. Usa 'NUEVO ESCANEO' para escanear otro billete.";
+      statusEl.textContent = "✅ Cámara activa. Usa NUEVO ESCANEO para el siguiente billete.";
       scanLoop();
     }catch(e){
-      statusEl.textContent =
-        "❌ Error iniciando.\n" +
-        (e?.name || "Error") + ": " + (e?.message || e);
+      statusEl.textContent = "❌ Error iniciando: " + (e?.message || e);
       stopAll();
     }
   }
@@ -436,18 +464,29 @@
     screenStart.classList.remove("hidden");
 
     displayedCandidate = null;
+    displayedInList = null;
     serialLabel.textContent = "—";
+    serialLabel.classList.remove("warn");
     resetPending();
+    nonBCount = 0;
+
     statusEl.textContent = "Elige corte e inicia cámara.";
   }
 
-  // ---------- Nuevo escaneo (reinicia solo el resultado, NO la cámara) ----------
+  // ---------- Nuevo escaneo (reinicia resultado, NO la cámara) ----------
   function newScan(){
     displayedCandidate = null;
-    serialLabel.textContent = "—";
+    displayedInList = null;
+    serialLabel.classList.remove("warn");
+    serialLabel.textContent = "Buscando…";
     result.style.display = "none";
     resetPending();
-    statusEl.textContent = "Nuevo escaneo… apunta al serial dentro del marco.";
+    nonBCount = 0;
+
+    // primer resultado del nuevo billete rápido
+    NEED_SAME = 2;
+
+    statusEl.textContent = "Nuevo escaneo… apunta el serial dentro del marco.";
   }
 
   // ---------- Loop OCR ----------
@@ -486,39 +525,60 @@
       cropCtx.putImageData(preprocess(crop), 0, 0);
 
       const { data } = await worker.recognize(cropCanvas);
-      const serial = extract(data?.text || "");
+      const parsed = parseSerial(data?.text || "");
 
-      // Si no detecta, NO borra nada (mantiene número y símbolo)
-      if(!serial){
+      // Si no detecta nada: mantenemos lo que ya estaba (número/símbolo/mensaje)
+      if(parsed.status === "none"){
         return;
       }
 
-      const candidate = `${serial.num} B`;
+      // Encontró 9 dígitos + letra
+      const candidate = `${parsed.num} ${parsed.letter}`;
 
-      const confirmed = feedCandidate(candidate);
+      // Si la letra NO es B: mostrar “Serie no reconocida”
+      if(parsed.letter !== "B"){
+        nonBCount++;
+        if(nonBCount >= NONB_NEED){
+          serialLabel.classList.add("warn");
+          serialLabel.textContent = "Serie no reconocida";
+          // Mantener el símbolo del último número si existía (no lo tocamos)
+        }
+        return;
+      }
+
+      // Es B: resetea contador nonB
+      nonBCount = 0;
+
+      // Confirmación 2 (rápido) / 3 (estable)
+      const confirmed = feedCandidate(`${parsed.num} B`);
       if(!confirmed){
-        // no cambiamos lo mostrado
+        // No tocar lo fijado. Si todavía no hay nada fijado, muestra “Buscando…”
+        if(!displayedCandidate && !serialLabel.classList.contains("warn")){
+          serialLabel.textContent = "Buscando…";
+        }
         return;
       }
 
-      // Confirmado: fijamos el número y símbolo
-      displayedCandidate = candidate;
+      // Confirmado: fijamos
+      displayedCandidate = `${parsed.num} B`;
+      serialLabel.classList.remove("warn");
       serialLabel.textContent = displayedCandidate;
 
-      const inList = inRangesForCut_B(selectedCut, Number(serial.num));
-      showDecision(inList);
+      displayedInList = inRangesForCut_B(selectedCut, Number(parsed.num));
+      showDecision(displayedInList);
 
-      // Mantener símbolo mientras se mantenga el número
       statusEl.textContent =
-        `Corte ${selectedCut} · ${displayedCandidate} → ${inList ? "EN LISTA (X)" : "NO EN LISTA (✓)"}`;
+        `Corte ${selectedCut} · ${displayedCandidate} → ${displayedInList ? "EN LISTA (X)" : "NO EN LISTA (✓)"}`;
 
-      // Opcional vibración cuando está EN LISTA
-      if(inList){
+      // luego del primer resultado, volvemos estable
+      NEED_SAME = NEED_SAME_AFTER_FIRST;
+
+      // resetea para exigir N iguales para el próximo cambio
+      resetPending();
+
+      if(displayedInList){
         navigator.vibrate?.(120);
       }
-
-      // Exigir 3 iguales para el próximo cambio
-      resetPending();
 
     } finally {
       busy = false;
