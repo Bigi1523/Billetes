@@ -25,7 +25,7 @@
     display:none;
   }
 
-  /* Número detectado (ARRIBA del ROI) */
+  /* Número detectado (arriba del ROI) */
   #serial{
     position:absolute;
     text-align:center;
@@ -241,13 +241,27 @@
     display:flex;
     align-items:center;
     justify-content:center;
+    position:relative;
   }
   #tableImg{
     width:100%;
     height:100%;
     object-fit:contain;
     background:#000;
+    display:block;
   }
+  #tableImgError{
+    position:absolute;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:16px;
+    font-weight:900;
+    opacity:.92;
+  }
+  #tableImgError.show{ display:flex; }
   #modalHint{
     text-align:center;
     opacity:.8;
@@ -309,9 +323,15 @@
       <div id="modalSerial">—</div>
       <button id="modalClose" class="pressable">CERRAR</button>
     </div>
+
     <div id="tableImgWrap">
       <img id="tableImg" alt="Tabla de rangos"/>
+      <div id="tableImgError">No se encontró la imagen de la tabla.<br><br>
+        Verifica que existan:<br>
+        <b>tables/bs10.png</b>, <b>tables/bs20.png</b>, <b>tables/bs50.png</b>
+      </div>
     </div>
+
     <div id="modalHint">Tabla del corte seleccionado</div>
   </div>
 </div>
@@ -335,6 +355,7 @@
   const modalSerial = document.getElementById("modalSerial");
   const modalClose = document.getElementById("modalClose");
   const tableImg = document.getElementById("tableImg");
+  const tableImgError = document.getElementById("tableImgError");
 
   let selectedCut = localStorage.getItem("selectedCut") || null;
   let rangesData = {};
@@ -343,15 +364,15 @@
   let running = false;
   let busy = false;
 
-  // Mantengo la lógica de tiempos/estabilidad como venías usando
+  // Mantener lógica de estabilidad
   const OCR_INTERVAL = 260;
-  let NEED_SAME = 2;                  // primer “fijado”
-  const NEED_SAME_AFTER_FIRST = 3;    // después más estable
+  let NEED_SAME = 2;                  // primer fijado
+  const NEED_SAME_AFTER_FIRST = 3;    // luego más estable
 
   let pendingCandidate = null;
   let pendingCount = 0;
 
-  let displayedNumber = null;      // SOLO número (8 o 9 dígitos)
+  let displayedNumber = null;      // SOLO número
   let displayedMatch = null;       // {start,end} o null
 
   let dotsTimer = null;
@@ -364,8 +385,13 @@
   };
   let roiPreset = localStorage.getItem("roiPreset") || "S";
 
-  // Tablas (opcional: sube estas imágenes al repo)
-  const TABLE_IMAGES = {
+  // Imágenes (primario + fallback)
+  const TABLE_IMAGE_PRIMARY = {
+    "10": "tables/bs10.png",
+    "20": "tables/bs20.png",
+    "50": "tables/bs50.png",
+  };
+  const TABLE_IMAGE_FALLBACK = {
     "10": "tables/10.png",
     "20": "tables/20.png",
     "50": "tables/50.png",
@@ -383,19 +409,17 @@
   }
   loadRanges().catch(()=>{});
 
-  // Busca rango en TODAS las letras (A/B/...) pero al OCR le ignoramos letras
-  function findRangeForCut(cut, num){
+  // ✅ Ahora SOLO vale Serie B: buscar SOLO en ranges[cut]["B"]
+  function findRangeForCut_BOnly(cut, num){
     const cutObj = rangesData?.[cut];
     if(!cutObj) return null;
 
-    const keys = Object.keys(cutObj);
-    for(const k of keys){
-      const list = cutObj[k];
-      if(!Array.isArray(list)) continue;
-      for(const r of list){
-        if(num >= r.start && num <= r.end){
-          return { start: r.start, end: r.end };
-        }
+    const list = cutObj["B"];
+    if(!Array.isArray(list)) return null;
+
+    for(const r of list){
+      if(num >= r.start && num <= r.end){
+        return { start: r.start, end: r.end };
       }
     }
     return null;
@@ -427,7 +451,7 @@
   const cropCanvas = document.createElement("canvas");
   const cropCtx = cropCanvas.getContext("2d",{willReadFrequently:true});
 
-  // Preprocess: lo mantenemos como venías (binariza para OCR)
+  // Mantener preprocess (binarizado)
   function preprocess(img){
     const d = img.data;
     let min=255, max=0;
@@ -446,15 +470,20 @@
     return img;
   }
 
-  // ✅ Parser SIN modificar números:
-  // Ignora letras simplemente extrayendo el primer grupo de 8 o 9 dígitos.
-  function parseSerialNumber(text){
-    // Reemplaza todo lo que no sea dígito por espacios
-    const onlyDigits = (text || "").replace(/[^\d]/g, " ");
-    // Toma el primer grupo exacto de 8 o 9 dígitos
+  // ✅ Parser: extrae 8/9 dígitos + detecta si hay “B” en el texto OCR (sin modificar nada)
+  function parseNumberAndSeriesB(text){
+    const t = (text || "").toUpperCase();
+
+    // Detectar la letra B como token o pegada cerca
+    // (robusto: si OCR entrega "019600096B" o "019600096 B")
+    const hasB = /\bB\b/.test(t) || /\d{6,9}\s*B\b/.test(t) || /\bB\s*\d{6,9}/.test(t) || /B/.test(t);
+
+    // Extraer primer grupo de 8 o 9 dígitos (sin cambiar)
+    const onlyDigits = t.replace(/[^\d]/g, " ");
     const m = onlyDigits.match(/\b(\d{8,9})\b/);
-    if(!m) return null;
-    return m[1]; // tal cual
+    const num = m ? m[1] : null;
+
+    return { num, hasB };
   }
 
   function showDecision(match){
@@ -462,6 +491,7 @@
     resultText.style.display="block";
 
     if(match){
+      // Si está en rangos -> X roja
       result.className="bad";
       result.textContent="✕";
       resultText.className="small";
@@ -471,6 +501,7 @@
       result.style.cursor = "pointer";
       result.title = "Toca para ver la tabla";
     } else {
+      // Si NO está en rangos -> check verde (válido)
       result.className="ok";
       result.textContent="✓";
       resultText.className="";
@@ -480,6 +511,14 @@
       result.style.cursor = "default";
       result.title = "";
     }
+  }
+
+  function showSerieNotRecognized(){
+    clearDecision();
+    result.style.display="none";
+    resultText.style.display="block";
+    resultText.className="small";
+    resultText.textContent = "Serie no reconocida (no es B)";
   }
 
   function clearDecision(){
@@ -503,8 +542,9 @@
       b.classList.toggle("active", b.dataset.cut===selectedCut);
     });
 
+    // Recalcular si ya hay número fijo
     if(running && displayedNumber){
-      displayedMatch = findRangeForCut(selectedCut, Number(displayedNumber));
+      displayedMatch = findRangeForCut_BOnly(selectedCut, Number(displayedNumber));
       showDecision(displayedMatch);
     }
   }
@@ -567,7 +607,6 @@
     if(worker) return worker;
     worker = await Tesseract.createWorker("eng");
     await worker.setParameters({
-      // Deja letras habilitadas (da igual), porque nosotros igual extraemos solo dígitos
       tessedit_char_whitelist:"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
       tessedit_pageseg_mode:"7"
     });
@@ -660,13 +699,38 @@
 
   function openTableModal(){
     if(!displayedNumber) return;
-    const src = TABLE_IMAGES[selectedCut];
-    if(!src) return;
+
+    tableImgError.classList.remove("show");
+    tableImg.style.display = "block";
 
     modalSerial.textContent = displayedNumber;
-    tableImg.src = src + "?v=" + Date.now();
+
+    // Intento 1: primario
+    const primary = TABLE_IMAGE_PRIMARY[selectedCut];
+    const fallback = TABLE_IMAGE_FALLBACK[selectedCut];
+
+    const tryLoad = (url1, url2) => {
+      tableImg.onerror = () => {
+        if(url2){
+          tableImg.onerror = () => {
+            tableImg.style.display = "none";
+            tableImgError.classList.add("show");
+          };
+          tableImg.src = url2 + "?v=" + Date.now();
+        } else {
+          tableImg.style.display = "none";
+          tableImgError.classList.add("show");
+        }
+      };
+      tableImg.src = url1 + "?v=" + Date.now();
+    };
+
+    if(primary) tryLoad(primary, fallback);
+    else if(fallback) tryLoad(fallback, null);
+
     tableModal.classList.add("show");
   }
+
   function closeTableModal(){
     tableModal.classList.remove("show");
   }
@@ -677,6 +741,7 @@
       openTableModal();
     }
   });
+
   modalClose.addEventListener("click", closeTableModal);
   tableModal.addEventListener("click", (e)=>{
     if(e.target === tableModal) closeTableModal();
@@ -730,10 +795,27 @@
 
       const { data } = await worker.recognize(cropCanvas);
 
-      // ✅ Mantener OCR “tal cual”: solo extraer 8 o 9 dígitos, ignorando letras.
-      const numStr = parseSerialNumber(data?.text || "");
+      const parsed = parseNumberAndSeriesB(data?.text || "");
+      const numStr = parsed.num;
+      const hasB = parsed.hasB;
+
+      // Si no hay número, seguir buscando
       if(!numStr) return;
 
+      // Si hay número pero NO es serie B => avisar
+      if(!hasB){
+        displayedNumber = numStr; // mostramos el número detectado (opcional)
+        serialLabel.className="";
+        serialLabel.textContent = displayedNumber;
+        stopDots();
+        showSerieNotRecognized();
+        // no fijamos candidato como válido de serie B
+        resetPending();
+        NEED_SAME = 2;
+        return;
+      }
+
+      // Serie B: aplicar estabilidad como antes
       const confirmed = feedCandidate(numStr);
       if(!confirmed) return;
 
@@ -742,7 +824,7 @@
       serialLabel.textContent = displayedNumber;
       stopDots();
 
-      displayedMatch = findRangeForCut(selectedCut, Number(displayedNumber));
+      displayedMatch = findRangeForCut_BOnly(selectedCut, Number(displayedNumber));
       showDecision(displayedMatch);
 
       NEED_SAME = NEED_SAME_AFTER_FIRST;
@@ -769,7 +851,7 @@
   window.addEventListener("resize", ()=> layoutROI());
   window.addEventListener("orientationchange", ()=> setTimeout(layoutROI, 150));
 
-  // Auto start si ya hay corte elegido (sin tener que apretar cada vez)
+  // Auto start si ya hay corte elegido
   async function autoStartIfPossible(){
     if(!selectedCut) return;
     try{ await startCamera(); }catch(_){}
